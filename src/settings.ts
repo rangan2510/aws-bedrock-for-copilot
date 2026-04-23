@@ -44,7 +44,7 @@ export type ThinkingEffort = "high" | "low" | "medium";
  * Get Bedrock settings with priority order
  */
 export async function getBedrockSettings(globalState: vscode.Memento): Promise<BedrockSettings> {
-  const config = vscode.workspace.getConfiguration("bedrock");
+  const config = vscode.workspace.getConfiguration("aws-bedrock-for-copilot");
 
   // Read profile first (needed for region resolution)
   // Note: null in config means "use default credentials", so we check inspect() for undefined
@@ -145,7 +145,7 @@ export async function updateBedrockSettings(
   target: vscode.ConfigurationTarget,
   globalState: vscode.Memento,
 ): Promise<void> {
-  const config = vscode.workspace.getConfiguration("bedrock");
+  const config = vscode.workspace.getConfiguration("aws-bedrock-for-copilot");
 
   // Update VSCode settings
   await config.update(setting, value, target);

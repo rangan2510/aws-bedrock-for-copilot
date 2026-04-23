@@ -4,6 +4,11 @@
 
 export interface ModelProfile {
   /**
+   * Whether the model requires adaptive thinking (thinking.type="adaptive") instead of "enabled".
+   * CLI-verified: only Claude Opus 4.7 requires this.
+   */
+  requiresAdaptiveThinking: boolean;
+  /**
    * Whether the model requires the interleaved-thinking beta header (Claude 4 models only)
    */
   requiresInterleavedThinkingHeader: boolean;
@@ -22,12 +27,14 @@ export interface ModelProfile {
    */
   supportsPromptCaching: boolean;
   /**
-   * Whether the model supports extended thinking (Claude Opus 4.6, Opus 4.5, Opus 4.1, Opus 4, Sonnet 4.6, Sonnet 4.5, Sonnet 4, Sonnet 3.7)
+   * Whether the model supports extended thinking.
+   * CLI-verified: Opus 4+, Sonnet 4+, Sonnet 3.7, Haiku 4.5
    */
   supportsThinking: boolean;
   /**
-   * Whether the model supports the adaptive thinking / thinking effort parameter (Claude Opus 4.6, Opus 4.5, Sonnet 4.6)
-   * Allows controlling token expenditure with "high", "medium", or "low" effort levels
+   * Whether the model supports output_config.effort ("high"/"medium"/"low").
+   * CLI-verified: Opus 4.6, Opus 4.7, Sonnet 4.6 only.
+   * Opus 4.5, Sonnet 4.5, Haiku 4.5 reject effort.
    */
   supportsThinkingEffort: boolean;
   /**
@@ -40,6 +47,11 @@ export interface ModelProfile {
    * Currently only Claude models support this field
    */
   supportsToolResultStatus: boolean;
+  /**
+   * Whether the temperature parameter is deprecated and must be omitted.
+   * CLI-verified: only Claude Opus 4.7.
+   */
+  temperatureDeprecated: boolean;
   /**
    * Format to use for tool result content ('text' or 'json')
    */
@@ -59,6 +71,7 @@ export interface ModelTokenLimits {
 
 export function getModelProfile(modelId: string): ModelProfile {
   const defaultProfile: ModelProfile = {
+    requiresAdaptiveThinking: false,
     requiresInterleavedThinkingHeader: false,
     supports1MContext: false,
     supportsCachingWithToolResults: false,
@@ -67,6 +80,7 @@ export function getModelProfile(modelId: string): ModelProfile {
     supportsThinkingEffort: false,
     supportsToolChoice: false,
     supportsToolResultStatus: false,
+    temperatureDeprecated: false,
     toolResultFormat: "text",
   };
 
@@ -82,11 +96,9 @@ export function getModelProfile(modelId: string): ModelProfile {
   // Provider-specific profiles
   switch (provider) {
     case "ai21":
-
-    case "cohere":
-    case "meta": {
-      // Older models don't support tool choice
-      return defaultProfile;
+    case "cohere": {
+      // CLI-verified: Jamba 1.5, Command R/R+ support tool calling
+      return { ...defaultProfile, supportsToolChoice: true };
     }
 
     case "amazon": {
@@ -94,6 +106,7 @@ export function getModelProfile(modelId: string): ModelProfile {
       // Nova does NOT support cachePoint after toolResult blocks
       if (modelId.includes("nova")) {
         return {
+          requiresAdaptiveThinking: false,
           requiresInterleavedThinkingHeader: false,
           supports1MContext: false,
           supportsCachingWithToolResults: false,
@@ -102,36 +115,45 @@ export function getModelProfile(modelId: string): ModelProfile {
           supportsThinkingEffort: false,
           supportsToolChoice: true,
           supportsToolResultStatus: false,
+          temperatureDeprecated: false,
           toolResultFormat: "text",
         };
       }
       return defaultProfile;
     }
+
     case "anthropic": {
-      // Claude models support tool choice and prompt caching
-      // Extended thinking is supported by Claude Opus 4+, Sonnet 4+, and Sonnet 3.7
+      // CLI-verified thinking support: Opus 4+, Sonnet 4+, Sonnet 3.7, Haiku 4.5
       const supportsThinking =
         modelId.includes("opus-4") ||
         modelId.includes("sonnet-4") ||
         modelId.includes("sonnet-3-7") ||
-        modelId.includes("sonnet-3.7");
+        modelId.includes("sonnet-3.7") ||
+        modelId.includes("haiku-4-5") ||
+        modelId.includes("haiku-4.5");
 
       // Interleaved thinking (beta header) is only for Claude 4 models
       const requiresInterleavedThinkingHeader =
         modelId.includes("opus-4") || modelId.includes("sonnet-4");
 
       // Claude models with extended thinking have issues with cachePoint after toolResult
-      // When extended thinking is enabled, cachePoint should only be added to messages without toolResult
       const supportsCachingWithToolResults = !supportsThinking;
 
-      // Adaptive thinking / thinking effort parameter is supported by Claude Opus 4.6, Opus 4.5, and Sonnet 4.6
-      // Allows controlling token expenditure with "high", "medium", or "low" effort levels
+      // CLI-verified: output_config.effort is supported by Opus 4.6, 4.7, Sonnet 4.6 ONLY.
+      // Opus 4.5, Sonnet 4.5, Haiku 4.5 reject effort.
       const supportsThinkingEffort =
         modelId.includes("opus-4-6") ||
-        modelId.includes("opus-4-5") ||
+        modelId.includes("opus-4-7") ||
         modelId.includes("sonnet-4-6");
 
+      // CLI-verified: only Opus 4.7 rejects thinking.type="enabled" and requires "adaptive"
+      const requiresAdaptiveThinking = modelId.includes("opus-4-7");
+
+      // CLI-verified: only Opus 4.7 rejects the temperature parameter
+      const temperatureDeprecated = modelId.includes("opus-4-7");
+
       return {
+        requiresAdaptiveThinking,
         requiresInterleavedThinkingHeader,
         supports1MContext: supports1MContext(modelId),
         supportsCachingWithToolResults,
@@ -139,38 +161,62 @@ export function getModelProfile(modelId: string): ModelProfile {
         supportsThinking,
         supportsThinkingEffort,
         supportsToolChoice: true,
-        supportsToolResultStatus: true, // Claude models support status field in tool results
+        supportsToolResultStatus: true,
+        temperatureDeprecated,
         toolResultFormat: "text",
       };
     }
-    case "mistral": {
-      // Mistral models require JSON format for tool results
+    case "deepseek": {
+      // CLI-verified: DeepSeek V3.2 supports tools; R1 does not
       return {
-        requiresInterleavedThinkingHeader: false,
-        supports1MContext: false,
-        supportsCachingWithToolResults: false,
-        supportsPromptCaching: false,
-        supportsThinking: false,
-        supportsThinkingEffort: false,
-        supportsToolChoice: false,
-        supportsToolResultStatus: false,
-        toolResultFormat: "json",
+        ...defaultProfile,
+        supportsToolChoice: !modelId.includes("r1"),
       };
+    }
+    case "google": {
+      // CLI-verified: Gemma 3 supports tool calling
+      return { ...defaultProfile, supportsToolChoice: true };
     }
 
-    case "openai": {
-      // OpenAI models support tool choice but not prompt caching
+    case "meta": {
+      // CLI-verified: all Llama models support tool calling via Converse API
+      return { ...defaultProfile, supportsToolChoice: true };
+    }
+
+    case "minimax":
+
+    case "moonshot":
+
+    case "moonshotai":
+
+    case "nvidia":
+    case "zai": {
+      // CLI-verified: all support tool calling via Converse API
+      return { ...defaultProfile, supportsToolChoice: true };
+    }
+    case "mistral": {
+      // CLI-verified: all current Mistral models on Bedrock support tool calling
       return {
-        requiresInterleavedThinkingHeader: false,
-        supports1MContext: false,
-        supportsCachingWithToolResults: false,
-        supportsPromptCaching: false,
-        supportsThinking: false,
-        supportsThinkingEffort: false,
+        ...defaultProfile,
         supportsToolChoice: true,
-        supportsToolResultStatus: false,
-        toolResultFormat: "text",
+        toolResultFormat: "json" as const,
       };
+    }
+    case "openai": {
+      // CLI-verified: GPT OSS models support tool calling
+      return { ...defaultProfile, supportsToolChoice: true };
+    }
+    case "qwen": {
+      // CLI-verified: Qwen3 supports tool calling
+      return { ...defaultProfile, supportsToolChoice: true };
+    }
+
+    case "writer": {
+      // CLI-verified: Palmyra X4/X5 support tools (via profile); Vision 7B does not
+      if (modelId.includes("vision")) {
+        return defaultProfile;
+      }
+      return { ...defaultProfile, supportsToolChoice: true };
     }
 
     default: {

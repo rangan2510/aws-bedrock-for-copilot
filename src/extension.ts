@@ -5,32 +5,38 @@ import { logger } from "./logger";
 import { BedrockChatModelProvider } from "./provider";
 
 export function activate(context: vscode.ExtensionContext) {
-  const outputChannel = vscode.window.createOutputChannel("Amazon Bedrock Models", { log: true });
+  const outputChannel = vscode.window.createOutputChannel("AWS Bedrock for Copilot", { log: true });
   logger.initialize(outputChannel, context.extensionMode);
 
   // Log activation message with debugging tips
   logger.info(
-    "Amazon Bedrock extension activated. For verbose debugging, set log level to Debug via the output channel dropdown menu.",
+    "AWS Bedrock for Copilot extension activated. For verbose debugging, set log level to Debug via the output channel dropdown menu.",
   );
 
   const provider = new BedrockChatModelProvider(context.secrets, context.globalState);
   // Register provider and ensure it is disposed with the extension
-  const providerDisposable = vscode.lm.registerLanguageModelChatProvider("bedrock", provider);
-  const manageCmdDisposable = vscode.commands.registerCommand("bedrock.manage", async () => {
-    await manageSettings(context.secrets, context.globalState);
-  });
+  const providerDisposable = vscode.lm.registerLanguageModelChatProvider(
+    "aws-bedrock-for-copilot",
+    provider,
+  );
+  const manageCmdDisposable = vscode.commands.registerCommand(
+    "aws-bedrock-for-copilot.manage",
+    async () => {
+      await manageSettings(context.secrets, context.globalState);
+    },
+  );
 
   // Refresh provider model list when relevant things change so UI updates immediately
   const cfgDisposable = vscode.workspace.onDidChangeConfiguration((e) => {
     if (
-      e.affectsConfiguration("bedrock.region") ||
-      e.affectsConfiguration("bedrock.profile") ||
-      e.affectsConfiguration("bedrock.preferredModel") ||
-      e.affectsConfiguration("bedrock.inferenceProfiles.preferRegional") ||
-      e.affectsConfiguration("bedrock.context1M.enabled") ||
-      e.affectsConfiguration("bedrock.promptCaching.enabled") ||
-      e.affectsConfiguration("bedrock.thinking.enabled") ||
-      e.affectsConfiguration("bedrock.thinking.budgetTokens") ||
+      e.affectsConfiguration("aws-bedrock-for-copilot.region") ||
+      e.affectsConfiguration("aws-bedrock-for-copilot.profile") ||
+      e.affectsConfiguration("aws-bedrock-for-copilot.preferredModel") ||
+      e.affectsConfiguration("aws-bedrock-for-copilot.inferenceProfiles.preferRegional") ||
+      e.affectsConfiguration("aws-bedrock-for-copilot.context1M.enabled") ||
+      e.affectsConfiguration("aws-bedrock-for-copilot.promptCaching.enabled") ||
+      e.affectsConfiguration("aws-bedrock-for-copilot.thinking.enabled") ||
+      e.affectsConfiguration("aws-bedrock-for-copilot.thinking.budgetTokens") ||
       e.affectsConfiguration("github.copilot.chat.anthropic.thinking.enabled") ||
       e.affectsConfiguration("github.copilot.chat.anthropic.thinking.maxTokens")
     ) {

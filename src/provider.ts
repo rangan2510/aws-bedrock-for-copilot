@@ -98,7 +98,7 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
 
     if (!hasRunBefore && !options.silent) {
       const action = await vscode.window.showInformationMessage(
-        "Amazon Bedrock integration requires AWS credentials. Would you like to configure your AWS profile and region first?",
+        "AWS Bedrock for Copilot requires AWS credentials. Would you like to configure your AWS profile and region first?",
         "Configure Settings",
         "Use Default Credentials",
       );
@@ -107,7 +107,7 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
       await this.globalState.update("bedrock.hasRunBefore", true);
 
       if (action === "Configure Settings") {
-        await vscode.commands.executeCommand("bedrock.manage");
+        await vscode.commands.executeCommand("aws-bedrock-for-copilot.manage");
         // Return empty array - user will need to refresh after configuring
         return [];
       } else if (action !== "Use Default Credentials") {
@@ -121,7 +121,7 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
     if (!authConfig) {
       if (!options.silent) {
         vscode.window.showErrorMessage(
-          "AWS Bedrock authentication not configured. Please run 'Manage Amazon Bedrock Provider'.",
+          "AWS Bedrock authentication not configured. Please run 'Manage AWS Bedrock for Copilot'.",
         );
       }
       return [];
@@ -229,12 +229,12 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
                 imageInput: vision,
                 toolCalling: true,
               },
-              family: "bedrock",
+              family: "aws-bedrock-for-copilot",
               id: modelIdToUse,
               maxInputTokens: maxInput,
               maxOutputTokens: maxOutput,
               name: m.modelName,
-              tooltip: `Amazon Bedrock - ${m.providerName}${tooltipSuffix}`,
+              tooltip: `AWS Bedrock - ${m.providerName}${tooltipSuffix}`,
               version: "1.0.0",
             };
             infos.push(modelInfo);
@@ -269,12 +269,12 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
                 imageInput: vision,
                 toolCalling: true,
               },
-              family: "bedrock",
+              family: "aws-bedrock-for-copilot",
               id: profile.modelArn,
               maxInputTokens: maxInput,
               maxOutputTokens: maxOutput,
               name: profile.modelName,
-              tooltip: `Amazon Bedrock - ${profile.providerName} (Application Inference Profile)`,
+              tooltip: `AWS Bedrock - ${profile.providerName} (Application Inference Profile)`,
               version: "1.0.0",
             };
             infos.push(profileInfo);
@@ -590,6 +590,8 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
         budgetTokens,
         betaHeaders,
         thinkingEffortEnabled ? settings.thinking.effort : undefined,
+        modelProfile.temperatureDeprecated,
+        modelProfile.requiresAdaptiveThinking,
       );
 
       // Log request details
@@ -752,6 +754,34 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
     }
   }
 
+  /** Apply extended thinking fields. Extracted to reduce cognitive complexity. */
+  private applyThinkingFields(
+    requestInput: ConverseStreamCommandInput,
+    budgetTokens: number,
+    betaHeaders: string[],
+    thinkingEffort?: "high" | "low" | "medium",
+    temperatureDeprecated?: boolean,
+    requiresAdaptiveThinking?: boolean,
+  ): void {
+    if (!temperatureDeprecated) {
+      requestInput.inferenceConfig!.temperature = 1;
+    }
+    // CLI-verified: Opus 4.7 requires adaptive, all others use enabled+budget
+    if (requiresAdaptiveThinking) {
+      requestInput.additionalModelRequestFields = {
+        thinking: { type: "adaptive" },
+        ...(betaHeaders.length > 0 ? { anthropic_beta: betaHeaders } : {}),
+        ...(thinkingEffort ? { output_config: { effort: thinkingEffort } } : {}),
+      };
+    } else {
+      requestInput.additionalModelRequestFields = {
+        thinking: { budget_tokens: budgetTokens, type: "enabled" },
+        ...(betaHeaders.length > 0 ? { anthropic_beta: betaHeaders } : {}),
+        ...(thinkingEffort ? { output_config: { effort: thinkingEffort } } : {}),
+      };
+    }
+  }
+
   /**
    * Build beta headers array for the request
    */
@@ -812,19 +842,22 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
       }
 
       const limits = getModelTokenLimits(baseModelId, settings.context1M.enabled);
-      const likelyVisionCapable = /anthropic\.|nova\.|llama\.|pixtral|gpt-oss/i.test(baseModelId);
+      const likelyVisionCapable =
+        /anthropic\.|nova\.|llama\.|pixtral|mistral-large-3|magistral|gemma|kimi-k2\.5|nemotron.*v2|qwen3-vl|palmyra-vision/i.test(
+          baseModelId,
+        );
 
       return {
         capabilities: {
           imageInput: likelyVisionCapable,
           toolCalling: true,
         },
-        family: "bedrock",
+        family: "aws-bedrock-for-copilot",
         id: modelId,
         maxInputTokens: limits.maxInputTokens,
         maxOutputTokens: limits.maxOutputTokens,
         name: modelId,
-        tooltip: "Amazon Bedrock - manual model entry",
+        tooltip: "AWS Bedrock - manual model entry",
         version: "1.0.0",
       };
     } catch (error) {
@@ -915,6 +948,8 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
     budgetTokens: number,
     betaHeaders: string[],
     thinkingEffort?: "high" | "low" | "medium",
+    temperatureDeprecated?: boolean,
+    requiresAdaptiveThinking?: boolean,
   ): ConverseStreamCommandInput {
     const requestInput: ConverseStreamCommandInput = {
       inferenceConfig: {
@@ -924,10 +959,13 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
             : model.maxOutputTokens,
           model.maxOutputTokens,
         ),
-        temperature:
-          typeof options.modelOptions?.temperature === "number"
-            ? options.modelOptions?.temperature
-            : 0.7,
+        // CLI-verified: only Opus 4.7 rejects temperature
+        ...(!temperatureDeprecated && {
+          temperature:
+            typeof options.modelOptions?.temperature === "number"
+              ? options.modelOptions?.temperature
+              : 0.7,
+        }),
       },
       messages: converted.messages,
       modelId: model.id,
@@ -961,6 +999,8 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
       budgetTokens,
       betaHeaders,
       thinkingEffort,
+      temperatureDeprecated,
+      requiresAdaptiveThinking,
     );
 
     return requestInput;
@@ -1002,44 +1042,32 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
     budgetTokens: number,
     betaHeaders: string[],
     thinkingEffort?: "high" | "low" | "medium",
+    temperatureDeprecated?: boolean,
+    requiresAdaptiveThinking?: boolean,
   ): void {
     if (extendedThinkingEnabled) {
-      // Extended thinking requires temperature 1.0
-      requestInput.inferenceConfig!.temperature = 1;
-
-      // Add thinking configuration to additionalModelRequestFields
-      requestInput.additionalModelRequestFields = {
-        thinking: {
-          budget_tokens: budgetTokens,
-          type: "enabled",
-        },
-        ...(betaHeaders.length > 0 ? { anthropic_beta: betaHeaders } : {}),
-        // Add thinking effort for Claude Opus 4.5 and Sonnet 4.6 (controls token expenditure)
-        ...(thinkingEffort ? { output_config: { effort: thinkingEffort } } : {}),
-      };
-
-      logger.debug("[Bedrock Model Provider] Extended thinking enabled", {
-        anthropicBeta: betaHeaders.length > 0 ? betaHeaders : undefined,
+      this.applyThinkingFields(
+        requestInput,
         budgetTokens,
-        interleavedThinking: betaHeaders.includes("interleaved-thinking-2025-05-14"),
+        betaHeaders,
+        thinkingEffort,
+        temperatureDeprecated,
+        requiresAdaptiveThinking,
+      );
+      logger.debug("[Bedrock Model Provider] Extended thinking enabled", {
+        budgetTokens: requiresAdaptiveThinking ? "(adaptive)" : budgetTokens,
         modelId,
-        supports1MContext: betaHeaders.includes("context-1m-2025-08-07"),
-        temperature: 1,
-        thinkingEffort: thinkingEffort ?? "(not applicable)",
+        thinkingType: requiresAdaptiveThinking ? "adaptive" : "enabled",
       });
       return;
     }
 
     if (thinkingEffort) {
-      // Claude Opus 4.5 and Sonnet 4.6 effort parameter can be used even without extended thinking
-      // This affects all token spend including tool calls
       requestInput.additionalModelRequestFields = {
         ...(betaHeaders.length > 0 ? { anthropic_beta: betaHeaders } : {}),
         output_config: { effort: thinkingEffort },
       };
-
-      logger.debug("[Bedrock Model Provider] Thinking effort enabled (without extended thinking)", {
-        anthropicBeta: betaHeaders.length > 0 ? betaHeaders : undefined,
+      logger.debug("[Bedrock Model Provider] Thinking effort (no extended thinking)", {
         modelId,
         thinkingEffort,
       });
@@ -1047,11 +1075,7 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
     }
 
     if (betaHeaders.length > 0) {
-      // Add beta headers even without thinking or effort
-      requestInput.additionalModelRequestFields = {
-        anthropic_beta: betaHeaders,
-      };
-
+      requestInput.additionalModelRequestFields = { anthropic_beta: betaHeaders };
       logger.debug("[Bedrock Model Provider] 1M context enabled", { modelId });
     }
   }
@@ -1349,7 +1373,7 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
       if (!accessKeyId || !secretAccessKey) {
         if (!silent) {
           vscode.window.showErrorMessage(
-            "AWS access keys not configured. Please run 'Manage Amazon Bedrock Provider'.",
+            "AWS access keys not configured. Please run 'Manage AWS Bedrock for Copilot'.",
           );
         }
         return undefined;

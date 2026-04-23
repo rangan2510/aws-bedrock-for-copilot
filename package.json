@@ -1,8 +1,8 @@
 {
-  "name": "amazon-bedrock-copilot-chat",
-  "publisher": "vtkn",
-  "displayName": "Amazon Bedrock Provider for GitHub Copilot Chat",
-  "description": "Amazon Bedrock integration using VSCode's official Language Model Chat Provider API. Connects AWS Bedrock models (Claude, OpenAI OSS, DeepSeek) to GitHub Copilot Chat via AWS SDK. Supports streaming, tool calling, and vision.",
+  "name": "aws-bedrock-for-copilot",
+  "publisher": "rangan2510",
+  "displayName": "AWS Bedrock for Copilot",
+  "description": "Amazon Bedrock integration using VSCode's official Language Model Chat Provider API. Connects AWS Bedrock models such as Claude (including Opus 4.7), OpenAI OSS, DeepSeek to GitHub Copilot Chat via AWS SDK. Supports streaming, tool calling, and vision.",
   "icon": "assets/logo.png",
   "repository": {
     "type": "git",
@@ -27,27 +27,27 @@
   "contributes": {
     "languageModelChatProviders": [
       {
-        "vendor": "bedrock",
-        "displayName": "Amazon Bedrock",
-        "managementCommand": "bedrock.manage"
+        "vendor": "aws-bedrock-for-copilot",
+        "displayName": "AWS Bedrock for Copilot",
+        "managementCommand": "aws-bedrock-for-copilot.manage"
       }
     ],
     "commands": [
       {
-        "command": "bedrock.manage",
-        "title": "Manage Amazon Bedrock Provider"
+        "command": "aws-bedrock-for-copilot.manage",
+        "title": "Manage AWS Bedrock for Copilot"
       }
     ],
     "configuration": {
-      "title": "Amazon Bedrock",
+      "title": "AWS Bedrock for Copilot",
       "properties": {
-        "bedrock.region": {
+        "aws-bedrock-for-copilot.region": {
           "type": "string",
           "default": "us-east-1",
           "description": "AWS region for Amazon Bedrock API calls",
           "scope": "resource"
         },
-        "bedrock.profile": {
+        "aws-bedrock-for-copilot.profile": {
           "type": [
             "string",
             "null"
@@ -56,7 +56,7 @@
           "description": "AWS named profile from ~/.aws/credentials. Leave empty to use default credentials chain (environment variables, IAM roles, SSO, etc.)",
           "scope": "resource"
         },
-        "bedrock.preferredModel": {
+        "aws-bedrock-for-copilot.preferredModel": {
           "type": [
             "string",
             "null"
@@ -65,20 +65,20 @@
           "description": "Preferred Amazon Bedrock model ID to use by default (e.g., 'anthropic.claude-3-5-sonnet-20241022-v2:0'). Leave empty to let Copilot choose.",
           "scope": "resource"
         },
-        "bedrock.thinking.enabled": {
+        "aws-bedrock-for-copilot.thinking.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable extended thinking for supported Anthropic Claude models (Opus 4.1, Opus 4, Sonnet 4.6, Sonnet 4.5, Sonnet 4, Sonnet 3.7). Allows models to reason through complex tasks before responding.",
           "scope": "resource"
         },
-        "bedrock.thinking.budgetTokens": {
+        "aws-bedrock-for-copilot.thinking.budgetTokens": {
           "type": "number",
           "default": 10000,
           "minimum": 1024,
           "description": "Number of tokens allocated for thinking. Minimum 1024. Note: For Anthropic Claude models, this is automatically calculated as 20% of the model's maximum output tokens and this setting is ignored.",
           "scope": "resource"
         },
-        "bedrock.thinking.effort": {
+        "aws-bedrock-for-copilot.thinking.effort": {
           "type": "string",
           "default": "high",
           "enum": [
@@ -94,19 +94,19 @@
           "description": "Thinking effort level for Claude Opus 4.5 and Sonnet 4.6. Controls how eager Claude is about spending tokens when responding. Higher effort = better quality but more tokens.",
           "scope": "resource"
         },
-        "bedrock.context1M.enabled": {
+        "aws-bedrock-for-copilot.context1M.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable 1M context window for Claude Sonnet 4.x and Opus 4.6 models. When enabled, these models can handle up to 1 million tokens of input context. Note: Using 1M context increases API costs.",
           "scope": "resource"
         },
-        "bedrock.promptCaching.enabled": {
+        "aws-bedrock-for-copilot.promptCaching.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable prompt caching for supported models to reduce latency and costs. Caches system prompts, tool definitions, and recent tool results. Disable if you need fully fresh responses or want to avoid cache-related costs.",
           "scope": "resource"
         },
-        "bedrock.inferenceProfiles.preferRegional": {
+        "aws-bedrock-for-copilot.inferenceProfiles.preferRegional": {
           "type": "boolean",
           "default": false,
           "description": "Prefer regional inference profiles over global ones. Enable this if your policies restrict access to global inference profiles. When enabled, the extension will use regional inference profiles (e.g., eu.anthropic.claude-opus-4-6-v1) instead of global ones (e.g., global.anthropic.claude-opus-4-6-v1).",

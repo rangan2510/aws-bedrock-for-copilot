@@ -81,7 +81,7 @@ suite("Amazon Bedrock Chat Provider Extension", () => {
       const est = await provider.provideTokenCount(
         {
           capabilities: {},
-          family: "bedrock",
+          family: "aws-bedrock-for-copilot",
           id: "m",
           maxInputTokens: 1000,
           maxOutputTokens: 1000,

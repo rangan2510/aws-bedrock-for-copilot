@@ -84,7 +84,7 @@ export async function manageSettings(
     ],
     {
       placeHolder: "Choose an action",
-      title: "Manage Amazon Bedrock Provider",
+      title: "Manage AWS Bedrock for Copilot",
     },
   );
 
@@ -317,9 +317,9 @@ async function handleClearSettings(
   secrets: vscode.SecretStorage,
   globalState: vscode.Memento,
 ): Promise<void> {
-  const config = vscode.workspace.getConfiguration("bedrock");
+  const config = vscode.workspace.getConfiguration("aws-bedrock-for-copilot");
   await clearAllSettings(config, secrets, globalState);
-  vscode.window.showInformationMessage("Amazon Bedrock settings cleared from all scopes.");
+  vscode.window.showInformationMessage("AWS Bedrock for Copilot settings cleared from all scopes.");
 }
 
 async function handleProfileSelection(
@@ -391,7 +391,7 @@ async function handleRegionSelection(
             {
               ignoreFocusOut: true,
               placeHolder: existingRegion ? `Current: ${existingRegion}` : "Current: Not set",
-              title: "Amazon Bedrock Region",
+              title: "AWS Bedrock Region",
             },
             cancellationToken.token,
           );
@@ -405,7 +405,7 @@ async function handleRegionSelection(
 
     const scopeLabel = scope === vscode.ConfigurationTarget.Workspace ? "workspace" : "user";
     vscode.window.showInformationMessage(
-      `Amazon Bedrock region set to ${region} (${scopeLabel} settings).`,
+      `AWS Bedrock region set to ${region} (${scopeLabel} settings).`,
     );
   } finally {
     cancellationToken.dispose();
@@ -477,7 +477,7 @@ async function resolveSsmCredentials(
       } catch {
         // ignore and try config directly
       }
-      const cfg = vscode.workspace.getConfiguration("bedrock");
+      const cfg = vscode.workspace.getConfiguration("aws-bedrock-for-copilot");
       const prof = cfg.get<null | string>("profile");
       return prof ?? undefined;
     };
