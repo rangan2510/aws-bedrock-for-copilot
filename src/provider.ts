@@ -23,11 +23,14 @@ import { BedrockAPIClient, ListFoundationModelsDeniedError } from "./bedrock-cli
 import { convertMessages, stripThinkingContent } from "./converters/messages";
 import { convertTools } from "./converters/tools";
 import { logger } from "./logger";
-import { getModelProfile, getModelTokenLimits } from "./profiles";
-import { getBedrockSettings } from "./settings";
+import { getModelProfile, getModelTokenLimits, resolveEffortLevel } from "./profiles";
+import { getBedrockSettings, type ReasoningEffort, type ThinkingEffort } from "./settings";
 import { StreamProcessor, type ThinkingBlock } from "./stream-processor";
 import type { AuthConfig, AuthMethod, BedrockModelSummary } from "./types";
 import { validateBedrockMessages } from "./validation";
+
+/** Warning glyph prepended to the displayed name of LEGACY foundation models. */
+const LEGACY_PREFIX = "\u26A0\uFE0E ";
 
 class NoAccessibleModelsError extends Error {
   constructor() {
@@ -215,11 +218,12 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
             const maxInput = limits.maxInputTokens;
             const maxOutput = limits.maxOutputTokens;
             const vision = m.inputModalities.includes(ModelModality.IMAGE);
+            const lifecycleStatus = m.modelLifecycle?.status;
 
             // Determine tooltip suffix based on inference profile type
-            let tooltipSuffix = "";
+            let profileSuffix = "";
             if (hasInferenceProfile) {
-              tooltipSuffix = modelIdToUse.startsWith("global.")
+              profileSuffix = modelIdToUse.startsWith("global.")
                 ? " (Global Inference Profile)"
                 : " (Regional Inference Profile)";
             }
@@ -229,12 +233,21 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
                 imageInput: vision,
                 toolCalling: true,
               },
+              detail: this.formatDetail(modelIdToUse, maxInput, maxOutput, vision, lifecycleStatus),
               family: "aws-bedrock-for-copilot",
               id: modelIdToUse,
               maxInputTokens: maxInput,
               maxOutputTokens: maxOutput,
-              name: m.modelName,
-              tooltip: `AWS Bedrock - ${m.providerName}${tooltipSuffix}`,
+              name: this.formatDisplayName(m.modelName, lifecycleStatus),
+              tooltip: this.formatTooltip({
+                lifecycleStatus,
+                maxInput,
+                maxOutput,
+                modelId: modelIdToUse,
+                profileSuffix,
+                providerName: m.providerName,
+                vision,
+              }),
               version: "1.0.0",
             };
             infos.push(modelInfo);
@@ -263,18 +276,34 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
             const maxInput = limits.maxInputTokens;
             const maxOutput = limits.maxOutputTokens;
             const vision = profile.inputModalities.includes(ModelModality.IMAGE);
+            const lifecycleStatus = profile.modelLifecycle?.status;
 
             const profileInfo: LanguageModelChatInformation = {
               capabilities: {
                 imageInput: vision,
                 toolCalling: true,
               },
+              detail: this.formatDetail(
+                modelIdForLimits,
+                maxInput,
+                maxOutput,
+                vision,
+                lifecycleStatus,
+              ),
               family: "aws-bedrock-for-copilot",
               id: profile.modelArn,
               maxInputTokens: maxInput,
               maxOutputTokens: maxOutput,
-              name: profile.modelName,
-              tooltip: `AWS Bedrock - ${profile.providerName} (Application Inference Profile)`,
+              name: this.formatDisplayName(profile.modelName, lifecycleStatus),
+              tooltip: this.formatTooltip({
+                lifecycleStatus,
+                maxInput,
+                maxOutput,
+                modelId: modelIdForLimits,
+                profileSuffix: " (Application Inference Profile)",
+                providerName: profile.providerName,
+                vision,
+              }),
               version: "1.0.0",
             };
             infos.push(profileInfo);
@@ -589,9 +618,10 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
         extendedThinkingEnabled,
         budgetTokens,
         betaHeaders,
-        thinkingEffortEnabled ? settings.thinking.effort : undefined,
+        thinkingEffortEnabled ? resolveEffortLevel(settings.thinking.effort, model.id) : undefined,
         modelProfile.temperatureDeprecated,
         modelProfile.requiresAdaptiveThinking,
+        modelProfile.supportsReasoningEffort ? settings.reasoningEffort : undefined,
       );
 
       // Log request details
@@ -754,12 +784,96 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
     }
   }
 
+  /**
+   * Format model display name with a warning prefix for LEGACY models.
+   * The warning glyph (U+26A0) signals that the model is deprecated by AWS
+   * and may stop responding after 30 days of inactivity for the account.
+   */
+  private formatDisplayName(name: string, lifecycleStatus?: string): string {
+    return lifecycleStatus === "LEGACY" ? `${LEGACY_PREFIX}${name}` : name;
+  }
+
+  /**
+   * Build the inline detail string shown next to the model name in the picker.
+   * Format: "<context>K | <output>K out | <thinking-mode> | <vision>"
+   */
+  private formatDetail(
+    modelId: string,
+    maxInput: number,
+    maxOutput: number,
+    vision: boolean,
+    lifecycleStatus?: string,
+  ): string {
+    const profile = getModelProfile(modelId);
+    const ctxK = Math.round((maxInput + maxOutput) / 1000);
+    const outK = Math.round(maxOutput / 1000);
+    const ctxLabel = ctxK >= 1000 ? `${(ctxK / 1000).toFixed(0)}M` : `${ctxK}K`;
+    const parts = [`${ctxLabel} ctx`, `${outK}K out`];
+
+    if (profile.requiresAdaptiveThinking) {
+      parts.push("adaptive thinking");
+    } else if (profile.supportsThinkingEffort) {
+      parts.push("adaptive or budget thinking");
+    } else if (profile.supportsThinking) {
+      parts.push("budget thinking");
+    }
+
+    if (vision) parts.push("vision");
+    if (lifecycleStatus === "LEGACY") parts.push("LEGACY");
+
+    return parts.join(" \u00B7 ");
+  }
+
+  /**
+   * Build a multi-line tooltip describing the model's capabilities.
+   * Plain string (VS Code's LanguageModelChatInformation.tooltip is `string`).
+   */
+  private formatTooltip(args: {
+    providerName: string;
+    modelId: string;
+    maxInput: number;
+    maxOutput: number;
+    vision: boolean;
+    profileSuffix: string;
+    lifecycleStatus?: string;
+  }): string {
+    const profile = getModelProfile(args.modelId);
+    const lines: string[] = [`AWS Bedrock - ${args.providerName}${args.profileSuffix}`];
+
+    if (args.lifecycleStatus === "LEGACY") {
+      lines.push(
+        "Warning: AWS marks this model as LEGACY. It may be deprecated and " +
+          "becomes gated after 30 days of account-level inactivity.",
+      );
+    }
+
+    const ctxK = Math.round((args.maxInput + args.maxOutput) / 1000);
+    const ctxLabel = ctxK >= 1000 ? `${(ctxK / 1000).toFixed(0)}M tokens` : `${ctxK}K tokens`;
+    lines.push(`Context: ${ctxLabel} | Max output: ${Math.round(args.maxOutput / 1000)}K tokens`);
+
+    if (profile.requiresAdaptiveThinking) {
+      lines.push("Thinking: adaptive only (uses output_config.effort)");
+    } else if (profile.supportsThinkingEffort) {
+      lines.push("Thinking: adaptive (recommended) or enabled+budget");
+    } else if (profile.supportsThinking) {
+      lines.push("Thinking: enabled+budget_tokens");
+    }
+
+    if (profile.temperatureDeprecated) {
+      lines.push("Note: temperature parameter is not supported");
+    }
+    if (args.vision) lines.push("Vision: image input supported");
+    if (profile.supportsToolChoice) lines.push("Tools: tool calling supported");
+
+    return lines.join("\n");
+  }
+
   /** Apply extended thinking fields. Extracted to reduce cognitive complexity. */
   private applyThinkingFields(
     requestInput: ConverseStreamCommandInput,
     budgetTokens: number,
     betaHeaders: string[],
-    thinkingEffort?: "high" | "low" | "medium",
+    thinkingEffort?: ThinkingEffort,
     temperatureDeprecated?: boolean,
     requiresAdaptiveThinking?: boolean,
   ): void {
@@ -852,12 +966,25 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
           imageInput: likelyVisionCapable,
           toolCalling: true,
         },
+        detail: this.formatDetail(
+          baseModelId,
+          limits.maxInputTokens,
+          limits.maxOutputTokens,
+          likelyVisionCapable,
+        ),
         family: "aws-bedrock-for-copilot",
         id: modelId,
         maxInputTokens: limits.maxInputTokens,
         maxOutputTokens: limits.maxOutputTokens,
         name: modelId,
-        tooltip: "AWS Bedrock - manual model entry",
+        tooltip: this.formatTooltip({
+          maxInput: limits.maxInputTokens,
+          maxOutput: limits.maxOutputTokens,
+          modelId: baseModelId,
+          profileSuffix: " (manual entry)",
+          providerName: "Bedrock",
+          vision: likelyVisionCapable,
+        }),
         version: "1.0.0",
       };
     } catch (error) {
@@ -947,9 +1074,10 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
     extendedThinkingEnabled: boolean,
     budgetTokens: number,
     betaHeaders: string[],
-    thinkingEffort?: "high" | "low" | "medium",
+    thinkingEffort?: ThinkingEffort,
     temperatureDeprecated?: boolean,
     requiresAdaptiveThinking?: boolean,
+    reasoningEffort?: ReasoningEffort,
   ): ConverseStreamCommandInput {
     const requestInput: ConverseStreamCommandInput = {
       inferenceConfig: {
@@ -1003,6 +1131,24 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
       requiresAdaptiveThinking,
     );
 
+    // Apply OpenAI-style reasoning_effort for non-Anthropic models that support it.
+    // OpenAI gpt-oss accepts an extra "minimal" tier that other vendors reject;
+    // downgrade to "low" for non-OpenAI families.
+    if (reasoningEffort) {
+      const effortToSend =
+        reasoningEffort === "minimal" && !model.id.includes("openai.") ? "low" : reasoningEffort;
+      const existing =
+        (requestInput.additionalModelRequestFields as Record<string, unknown> | undefined) ?? {};
+      requestInput.additionalModelRequestFields = {
+        ...existing,
+        reasoning_effort: effortToSend,
+      };
+      logger.debug("[Bedrock Model Provider] reasoning_effort applied", {
+        modelId: model.id,
+        reasoningEffort: effortToSend,
+      });
+    }
+
     return requestInput;
   }
 
@@ -1041,7 +1187,7 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
     extendedThinkingEnabled: boolean,
     budgetTokens: number,
     betaHeaders: string[],
-    thinkingEffort?: "high" | "low" | "medium",
+    thinkingEffort?: ThinkingEffort,
     temperatureDeprecated?: boolean,
     requiresAdaptiveThinking?: boolean,
   ): void {

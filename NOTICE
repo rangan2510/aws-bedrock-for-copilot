@@ -1,0 +1,74 @@
+AWS Bedrock for Copilot
+=======================
+
+This software is a fork of amazon-bedrock-copilot-chat:
+
+    Project:   amazon-bedrock-copilot-chat
+    Author:    Konstantin Vyatkin (@tinovyatkin)
+    Source:    https://github.com/tinovyatkin/amazon-bedrock-copilot-chat
+    License:   MIT License
+    Copyright: (c) 2024 Konstantin Vyatkin
+
+All foundational work -- the VSCode LanguageModelChatProvider integration,
+Amazon Bedrock streaming, message/tool conversion, AWS authentication, and
+the overall extension architecture -- was authored by Konstantin Vyatkin in
+the upstream project. This fork preserves and builds on that work.
+
+Modifications in this fork
+--------------------------
+
+    Project:   aws-bedrock-for-copilot
+    Maintainer: Rangan (@rangan2510)
+    Source:    https://github.com/rangan2510/aws-bedrock-for-copilot
+    License:   MIT License (same as upstream)
+    Copyright: (c) 2026 Rangan and contributors to this fork
+
+This fork adds, among other things:
+
+  * Claude Opus 4.7 support (adaptive thinking, deprecated temperature
+    parameter handling)
+  * Claude Haiku 4.5 extended thinking support
+  * Corrected thinking modes and token limits for Claude 4.x generations
+  * Expanded, CLI-verified capability profiles for 80+ models across 14
+    providers
+  * Graceful fallback when a model returns unparseable tool_use JSON
+  * `reasoning_effort` support for non-Anthropic reasoning models
+    (OpenAI gpt-oss, DeepSeek V3.2, Moonshot Kimi, Qwen3, GLM, MiniMax)
+    via a single `aws-bedrock-for-copilot.reasoningEffort` setting
+  * Vendor-namespaced settings (`anthropic.thinking.*`,
+    `anthropic.context1M.enabled`, etc.) with backward-compat reads of
+    the legacy flat keys
+  * Region dropdown in the Settings UI populated from the known set of
+    AWS Bedrock regions
+  * Capability-aware tooltips and inline detail strings in the model
+    picker (context window, output, thinking/reasoning mode, vision)
+  * LEGACY models surfaced with a warning prefix instead of being
+    silently filtered, so users can opt in with full visibility
+  * Parallel extension identity (vendor "aws-bedrock-for-copilot" with its
+    own config namespace), so it can be installed alongside the upstream
+    extension
+
+The full list of changes is in CHANGELOG.md, under the
+"Fork changelog" section.
+
+Relationship to upstream
+------------------------
+
+This is a friendly fork, not a hostile one. It exists to unblock users
+during periods of reduced upstream activity. Bugfixes and improvements
+that are not specific to the parallel-install identity rename are
+periodically offered upstream as pull requests. If the upstream project
+resumes active maintenance, the intent is to merge changes back and
+sunset this fork.
+
+If this extension is useful to you, please also star and watch the
+upstream repository:
+
+    https://github.com/tinovyatkin/amazon-bedrock-copilot-chat
+
+License
+-------
+
+Both the upstream work and this fork are distributed under the MIT License.
+See the LICENSE file at the root of this repository for the full license
+text, including the preserved upstream copyright notice.

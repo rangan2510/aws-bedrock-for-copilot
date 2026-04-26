@@ -1,0 +1,92 @@
+vendor,model_id,status
+Amazon,amazon.nova-2-lite-v1:0,ACTIVE
+Amazon,amazon.nova-canvas-v1:0,ACTIVE
+Amazon,amazon.nova-lite-v1:0,ACTIVE
+Amazon,amazon.nova-micro-v1:0,ACTIVE
+Amazon,amazon.nova-pro-v1:0,ACTIVE
+Amazon,amazon.nova-reel-v1:0,ACTIVE
+Amazon,amazon.titan-embed-image-v1,ACTIVE
+Amazon,amazon.titan-embed-image-v1:0,ACTIVE
+Amazon,amazon.titan-embed-text-v2:0,ACTIVE
+Amazon,eu.amazon.nova-2-lite-v1:0,INFERENCE_PROFILE/ACTIVE
+Amazon,eu.amazon.nova-lite-v1:0,INFERENCE_PROFILE/ACTIVE
+Amazon,eu.amazon.nova-micro-v1:0,INFERENCE_PROFILE/ACTIVE
+Amazon,eu.amazon.nova-pro-v1:0,INFERENCE_PROFILE/ACTIVE
+Amazon,global.amazon.nova-2-lite-v1:0,INFERENCE_PROFILE/ACTIVE
+Anthropic,anthropic.claude-3-7-sonnet-20250219-v1:0,LEGACY
+Anthropic,anthropic.claude-3-haiku-20240307-v1:0,LEGACY
+Anthropic,anthropic.claude-3-haiku-20240307-v1:0:48k,LEGACY
+Anthropic,anthropic.claude-3-sonnet-20240229-v1:0,LEGACY
+Anthropic,anthropic.claude-3-sonnet-20240229-v1:0:200k,LEGACY
+Anthropic,anthropic.claude-3-sonnet-20240229-v1:0:28k,LEGACY
+Anthropic,anthropic.claude-haiku-4-5-20251001-v1:0,ACTIVE
+Anthropic,anthropic.claude-opus-4-5-20251101-v1:0,ACTIVE
+Anthropic,anthropic.claude-opus-4-6-v1,ACTIVE
+Anthropic,anthropic.claude-opus-4-7,ACTIVE
+Anthropic,anthropic.claude-sonnet-4-20250514-v1:0,LEGACY
+Anthropic,anthropic.claude-sonnet-4-5-20250929-v1:0,ACTIVE
+Anthropic,anthropic.claude-sonnet-4-6,ACTIVE
+Anthropic,eu.anthropic.claude-3-7-sonnet-20250219-v1:0,INFERENCE_PROFILE/ACTIVE
+Anthropic,eu.anthropic.claude-3-haiku-20240307-v1:0,INFERENCE_PROFILE/ACTIVE
+Anthropic,eu.anthropic.claude-3-sonnet-20240229-v1:0,INFERENCE_PROFILE/ACTIVE
+Anthropic,eu.anthropic.claude-haiku-4-5-20251001-v1:0,INFERENCE_PROFILE/ACTIVE
+Anthropic,eu.anthropic.claude-opus-4-5-20251101-v1:0,INFERENCE_PROFILE/ACTIVE
+Anthropic,eu.anthropic.claude-opus-4-6-v1,INFERENCE_PROFILE/ACTIVE
+Anthropic,eu.anthropic.claude-opus-4-7,INFERENCE_PROFILE/ACTIVE
+Anthropic,eu.anthropic.claude-sonnet-4-20250514-v1:0,INFERENCE_PROFILE/ACTIVE
+Anthropic,eu.anthropic.claude-sonnet-4-5-20250929-v1:0,INFERENCE_PROFILE/ACTIVE
+Anthropic,eu.anthropic.claude-sonnet-4-6,INFERENCE_PROFILE/ACTIVE
+Anthropic,global.anthropic.claude-haiku-4-5-20251001-v1:0,INFERENCE_PROFILE/ACTIVE
+Anthropic,global.anthropic.claude-opus-4-5-20251101-v1:0,INFERENCE_PROFILE/ACTIVE
+Anthropic,global.anthropic.claude-opus-4-6-v1,INFERENCE_PROFILE/ACTIVE
+Anthropic,global.anthropic.claude-opus-4-7,INFERENCE_PROFILE/ACTIVE
+Anthropic,global.anthropic.claude-sonnet-4-20250514-v1:0,INFERENCE_PROFILE/ACTIVE
+Anthropic,global.anthropic.claude-sonnet-4-5-20250929-v1:0,INFERENCE_PROFILE/ACTIVE
+Anthropic,global.anthropic.claude-sonnet-4-6,INFERENCE_PROFILE/ACTIVE
+Cohere,cohere.embed-english-v3,ACTIVE
+Cohere,cohere.embed-multilingual-v3,ACTIVE
+Cohere,cohere.embed-v4:0,ACTIVE
+Cohere,eu.cohere.embed-v4:0,INFERENCE_PROFILE/ACTIVE
+Cohere,global.cohere.embed-v4:0,INFERENCE_PROFILE/ACTIVE
+Google,google.gemma-3-12b-it,ACTIVE
+Google,google.gemma-3-27b-it,ACTIVE
+Google,google.gemma-3-4b-it,ACTIVE
+Meta,eu.meta.llama3-2-1b-instruct-v1:0,INFERENCE_PROFILE/ACTIVE
+Meta,eu.meta.llama3-2-3b-instruct-v1:0,INFERENCE_PROFILE/ACTIVE
+Meta,meta.llama3-2-1b-instruct-v1:0,LEGACY
+Meta,meta.llama3-2-3b-instruct-v1:0,LEGACY
+MiniMax,minimax.minimax-m2,ACTIVE
+MiniMax,minimax.minimax-m2.1,ACTIVE
+MiniMax,minimax.minimax-m2.5,ACTIVE
+Mistral,eu.mistral.pixtral-large-2502-v1:0,INFERENCE_PROFILE/ACTIVE
+Mistral AI,mistral.devstral-2-123b,ACTIVE
+Mistral AI,mistral.magistral-small-2509,ACTIVE
+Mistral AI,mistral.ministral-3-14b-instruct,ACTIVE
+Mistral AI,mistral.ministral-3-3b-instruct,ACTIVE
+Mistral AI,mistral.ministral-3-8b-instruct,ACTIVE
+Mistral AI,mistral.mistral-7b-instruct-v0:2,ACTIVE
+Mistral AI,mistral.mistral-large-2402-v1:0,ACTIVE
+Mistral AI,mistral.mixtral-8x7b-instruct-v0:1,ACTIVE
+Mistral AI,mistral.pixtral-large-2502-v1:0,ACTIVE
+Mistral AI,mistral.voxtral-mini-3b-2507,ACTIVE
+Mistral AI,mistral.voxtral-small-24b-2507,ACTIVE
+NVIDIA,nvidia.nemotron-nano-12b-v2,ACTIVE
+NVIDIA,nvidia.nemotron-nano-3-30b,ACTIVE
+NVIDIA,nvidia.nemotron-nano-9b-v2,ACTIVE
+NVIDIA,nvidia.nemotron-super-3-120b,ACTIVE
+OpenAI,openai.gpt-oss-120b-1:0,ACTIVE
+OpenAI,openai.gpt-oss-20b-1:0,ACTIVE
+OpenAI,openai.gpt-oss-safeguard-120b,ACTIVE
+OpenAI,openai.gpt-oss-safeguard-20b,ACTIVE
+Qwen,qwen.qwen3-32b-v1:0,ACTIVE
+Qwen,qwen.qwen3-coder-30b-a3b-v1:0,ACTIVE
+Qwen,qwen.qwen3-next-80b-a3b,ACTIVE
+Qwen,qwen.qwen3-vl-235b-a22b,ACTIVE
+Twelvelabs,eu.twelvelabs.marengo-embed-2-7-v1:0,INFERENCE_PROFILE/ACTIVE
+Twelvelabs,eu.twelvelabs.marengo-embed-3-0-v1:0,INFERENCE_PROFILE/ACTIVE
+Twelvelabs,eu.twelvelabs.pegasus-1-2-v1:0,INFERENCE_PROFILE/ACTIVE
+Twelvelabs,global.twelvelabs.pegasus-1-2-v1:0,INFERENCE_PROFILE/ACTIVE
+TwelveLabs,twelvelabs.marengo-embed-2-7-v1:0,ACTIVE
+TwelveLabs,twelvelabs.marengo-embed-3-0-v1:0,ACTIVE
+TwelveLabs,twelvelabs.pegasus-1-2-v1:0,ACTIVE
+Z.AI,zai.glm-4.7-flash,ACTIVE

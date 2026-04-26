@@ -231,7 +231,9 @@ export class BedrockAPIClient {
       });
       const response = await this.bedrockClient.send(command, { abortSignal });
 
-      // Filter out deprecated (LEGACY) models
+      // Include both ACTIVE and LEGACY models. LEGACY models are still
+      // invokable in many regions (especially ap-south-1, ap-southeast-1)
+      // and the UI surfaces a warning prefix so users can distinguish.
       const allModels = (response.modelSummaries ?? []).map((summary) => ({
         customizationsSupported: summary.customizationsSupported,
         inferenceTypesSupported: summary.inferenceTypesSupported,
@@ -245,21 +247,10 @@ export class BedrockAPIClient {
         responseStreamingSupported: summary.responseStreamingSupported ?? false,
       }));
 
-      const activeModels = allModels.filter((model) => {
-        const isDeprecated = model.modelLifecycle?.status === "LEGACY";
-        if (isDeprecated) {
-          logger.debug(
-            `[Bedrock API Client] Excluding deprecated model: ${model.modelId} (${model.modelName})`,
-          );
-        }
-        return !isDeprecated;
-      });
+      const legacyCount = allModels.filter((m) => m.modelLifecycle?.status === "LEGACY").length;
+      logger.debug(`[Bedrock API Client] Found ${allModels.length} models (${legacyCount} legacy)`);
 
-      logger.debug(
-        `[Bedrock API Client] Excluded ${allModels.length - activeModels.length} deprecated models`,
-      );
-
-      return activeModels;
+      return allModels;
     } catch (error) {
       if (error instanceof AccessDeniedException) {
         logger.warn(

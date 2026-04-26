@@ -32,11 +32,21 @@ export function activate(context: vscode.ExtensionContext) {
       e.affectsConfiguration("aws-bedrock-for-copilot.region") ||
       e.affectsConfiguration("aws-bedrock-for-copilot.profile") ||
       e.affectsConfiguration("aws-bedrock-for-copilot.preferredModel") ||
-      e.affectsConfiguration("aws-bedrock-for-copilot.inferenceProfiles.preferRegional") ||
-      e.affectsConfiguration("aws-bedrock-for-copilot.context1M.enabled") ||
       e.affectsConfiguration("aws-bedrock-for-copilot.promptCaching.enabled") ||
+      e.affectsConfiguration("aws-bedrock-for-copilot.reasoningEffort") ||
+      e.affectsConfiguration("aws-bedrock-for-copilot.anthropic.thinking.enabled") ||
+      e.affectsConfiguration("aws-bedrock-for-copilot.anthropic.thinking.budgetTokens") ||
+      e.affectsConfiguration("aws-bedrock-for-copilot.anthropic.thinking.effort") ||
+      e.affectsConfiguration("aws-bedrock-for-copilot.anthropic.context1M.enabled") ||
+      e.affectsConfiguration(
+        "aws-bedrock-for-copilot.anthropic.inferenceProfiles.preferRegional",
+      ) ||
+      // Legacy (pre-namespace) keys -- still honored for backward compatibility
       e.affectsConfiguration("aws-bedrock-for-copilot.thinking.enabled") ||
       e.affectsConfiguration("aws-bedrock-for-copilot.thinking.budgetTokens") ||
+      e.affectsConfiguration("aws-bedrock-for-copilot.thinking.effort") ||
+      e.affectsConfiguration("aws-bedrock-for-copilot.context1M.enabled") ||
+      e.affectsConfiguration("aws-bedrock-for-copilot.inferenceProfiles.preferRegional") ||
       e.affectsConfiguration("github.copilot.chat.anthropic.thinking.enabled") ||
       e.affectsConfiguration("github.copilot.chat.anthropic.thinking.maxTokens")
     ) {

@@ -1,9 +1,65 @@
 # Changelog
 
-All notable changes to the "amazon-bedrock-copilot-chat" extension will be documented in this file.
+All notable changes to the `aws-bedrock-for-copilot` extension are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+This changelog is split into two sections:
+
+- **[Fork changelog](#fork-changelog-rangan2510aws-bedrock-for-copilot)** -- changes in this fork (`rangan2510/aws-bedrock-for-copilot`) on top of the upstream `v0.11.0` baseline.
+- **[Upstream changelog](#upstream-changelog-tinovyatkinamazon-bedrock-copilot-chat)** -- preserved history of the original [`tinovyatkin/amazon-bedrock-copilot-chat`](https://github.com/tinovyatkin/amazon-bedrock-copilot-chat) project.
+
+---
+
+## Fork changelog (`rangan2510/aws-bedrock-for-copilot`)
+
+### [0.11.1-fork.2] - 2026-04-26
+
+#### Added
+
+- **`reasoning_effort` for non-Anthropic models** -- new top-level `aws-bedrock-for-copilot.reasoningEffort` setting (minimal/low/medium/high). Forwarded as `reasoning_effort` for OpenAI gpt-oss, DeepSeek V3.2, Moonshot Kimi K2.5/K2 Thinking, Qwen3, Z.AI GLM, MiniMax M2.x. Silently ignored on families that don't support it; `minimal` is OpenAI-only and is downgraded to `low` for other vendors
+- **`supportsReasoningEffort` flag** in `ModelProfile` -- CLI-verified per provider against the live Bedrock Converse API
+- **Vendor-namespaced Anthropic settings** -- new keys: `anthropic.thinking.enabled`, `anthropic.thinking.budgetTokens`, `anthropic.thinking.effort`, `anthropic.context1M.enabled`, `anthropic.inferenceProfiles.preferRegional`. The pre-namespace flat keys (`thinking.*`, `context1M.*`, `inferenceProfiles.preferRegional`) are still read for backward compatibility
+- **Region dropdown** -- `aws-bedrock-for-copilot.region` is now an `enum` of known Bedrock regions with friendly labels in the Settings UI
+- **Capability-aware tooltip and detail strings** in the model picker -- each entry shows context window, max output, thinking/reasoning mode, and vision support inline; hover for full detail and any LEGACY warning
+- **LEGACY models surfaced** -- previously hidden, now shown with a `⚠︎` glyph prefix on the display name and a tooltip note about the AWS 30-day deprecation gate
+
+#### Changed
+
+- **Foundation-model filtering** -- `bedrock-client.ts` no longer drops `LEGACY` models from `ListFoundationModels`; the provider surfaces them with a warning so users can decide
+- **README** -- replaced the long per-vendor model tables with a concise capability summary, a new Settings reference, and pointers to the in-product picker
+- **Anthropic-namespaced setting descriptions** in `package.json` updated to match the actual model-by-model behaviour (e.g. `budgetTokens` only applies to enabled-thinking models, not adaptive ones)
+
+---
+
+### [0.11.1-fork.1] - 2026-04-26
+
+#### Added
+
+- **Parallel extension identity**: Renamed extension name, publisher, vendor, command IDs, and config namespace to `aws-bedrock-for-copilot.*` so it can be installed alongside the upstream `bedrock` extension without conflicts
+- **Credits and fork attribution**: Added explicit `## Credits` section in `README.md` and a `NOTICE` file at the repo root summarising the upstream relationship
+- **Fork copyright line**: Added fork copyright to `LICENSE` alongside the preserved upstream copyright
+- **Claude Opus 4.7 support**: Handles `thinking.type: "adaptive"` requirement and the deprecated `temperature` parameter introduced in Opus 4.7
+- **Claude Haiku 4.5 extended thinking**: Added missing thinking (`enabled + budget`) configuration
+- **Expanded provider profiles**: CLI-verified tool calling and vision capability profiles for 80+ models across 14 providers (Qwen, Kimi, GLM, MiniMax, NVIDIA, Gemma, DeepSeek, Writer, Cohere, AI21, and more)
+
+#### Fixed
+
+- **Correct thinking modes per Claude generation**: CLI-verified thinking configuration -- adaptive for Opus 4.7, enabled+budget for 4.5/4.1/4/3.7/Haiku 4.5, both for 4.6 models
+- **Correct token limits**: Opus 4.7 set to 1M context / 128K output; Opus 4.1/4 corrected to 32K output, per Anthropic docs
+- **Graceful tool_use fallback**: Models that return unparseable tool JSON no longer crash the request; a helpful message is surfaced instead
+
+#### Changed
+
+- **Repository URLs**: `repository.url` and `bugs.url` in `package.json` point to this fork so the VSCode Marketplace rewrites README image URLs to this repo rather than upstream
+- **Logo**: New fork logo in `assets/logo.png`
+
+---
+
+## Upstream changelog (`tinovyatkin/amazon-bedrock-copilot-chat`)
+
+The entries below are preserved verbatim from the upstream project and document history prior to this fork.
 
 ## [0.8.0] - 2026-02-23
 

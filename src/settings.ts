@@ -23,6 +23,11 @@ export interface BedrockSettings {
   promptCaching: {
     enabled: boolean;
   };
+  /**
+   * `reasoning_effort` value sent to non-Anthropic models that support it
+   * (OpenAI gpt-oss, DeepSeek V3.2, Moonshot Kimi, Qwen3, GLM, MiniMax).
+   */
+  reasoningEffort: ReasoningEffort;
   region: string;
   thinking: {
     budgetTokens: number;
@@ -32,13 +37,25 @@ export interface BedrockSettings {
 }
 
 /**
- * Thinking effort level for Claude Opus 4.5 and Sonnet 4.6.
+ * Thinking effort level for Anthropic adaptive-thinking models (Opus 4.6, 4.7, Sonnet 4.6).
  * Controls how eager Claude is about spending tokens when responding.
- * - "high": Maximum capability—Claude uses as many tokens as needed for the best possible outcome
+ * - "low": Most efficient -- significant token savings with some capability reduction
  * - "medium": Balanced approach with moderate token savings
- * - "low": Most efficient—significant token savings with some capability reduction
+ * - "high" (default): Maximum capability with no constraints (equivalent to omitting effort)
+ * - "xhigh": Extended capability for long-horizon work (Opus 4.7 only)
+ * - "max": Absolute maximum capability (Opus 4.6, 4.7, Sonnet 4.6 only)
+ *
+ * Note: Bedrock gates xhigh and max per-model. Unsupported levels fall back to "high".
  */
-export type ThinkingEffort = "high" | "low" | "medium";
+export type ThinkingEffort = "high" | "low" | "max" | "medium" | "xhigh";
+
+/**
+ * Reasoning effort for non-Anthropic models that accept the OpenAI-style
+ * `reasoning_effort` field via additionalModelRequestFields.
+ * - "minimal": OpenAI gpt-oss only -- silently rejected by other vendors (we'd downgrade to "low")
+ * - "low" / "medium" / "high": Standard tiers
+ */
+export type ReasoningEffort = "high" | "low" | "medium" | "minimal";
 
 /**
  * Get Bedrock settings with priority order
@@ -84,33 +101,51 @@ export async function getBedrockSettings(globalState: vscode.Memento): Promise<B
     preferredModel = preferredModelInspect.globalValue ?? undefined;
   }
 
-  // Read 1M context settings with defaults (enabled by default)
-  const context1MEnabled = config.get<boolean>("context1M.enabled") ?? true;
+  // Read Anthropic-namespaced settings with backward-compat fallback to the
+  // pre-namespace flat keys (so users who set `thinking.effort` keep working).
+  const context1MEnabled =
+    config.get<boolean>("anthropic.context1M.enabled") ??
+    config.get<boolean>("context1M.enabled") ??
+    true;
 
-  // Read prompt caching settings with defaults (enabled by default)
   const promptCachingEnabled = config.get<boolean>("promptCaching.enabled") ?? true;
 
-  // Read inference profiles settings with defaults (prefer global by default for backward compatibility)
   const preferRegionalInferenceProfiles =
-    config.get<boolean>("inferenceProfiles.preferRegional") ?? false;
+    config.get<boolean>("anthropic.inferenceProfiles.preferRegional") ??
+    config.get<boolean>("inferenceProfiles.preferRegional") ??
+    false;
 
-  // Read thinking settings with defaults
-  // Check GitHub Copilot's anthropic thinking settings first, then fall back to bedrock settings
+  // Check GitHub Copilot's anthropic thinking settings first, then namespaced, then legacy
   const copilotConfig = vscode.workspace.getConfiguration("github.copilot.chat.anthropic");
   const copilotThinkingEnabled = copilotConfig.get<boolean>("thinking.enabled");
   const copilotThinkingMaxTokens = copilotConfig.get<number>("thinking.maxTokens");
 
-  const thinkingEnabled = copilotThinkingEnabled ?? config.get<boolean>("thinking.enabled") ?? true;
+  const thinkingEnabled =
+    copilotThinkingEnabled ??
+    config.get<boolean>("anthropic.thinking.enabled") ??
+    config.get<boolean>("thinking.enabled") ??
+    true;
   const thinkingBudgetTokens =
-    copilotThinkingMaxTokens ?? config.get<number>("thinking.budgetTokens") ?? 10_000;
+    copilotThinkingMaxTokens ??
+    config.get<number>("anthropic.thinking.budgetTokens") ??
+    config.get<number>("thinking.budgetTokens") ??
+    10_000;
 
-  // Read thinking effort setting (only for Claude Opus 4.5 and Sonnet 4.6)
-  // Default to "high" for maximum capability
-  const validEffortValues: ThinkingEffort[] = ["high", "low", "medium"];
-  const rawEffort = config.get<string>("thinking.effort");
+  // Anthropic thinking effort (default "high")
+  const validEffortValues: ThinkingEffort[] = ["high", "low", "max", "medium", "xhigh"];
+  const rawEffort =
+    config.get<string>("anthropic.thinking.effort") ?? config.get<string>("thinking.effort");
   const thinkingEffort: ThinkingEffort =
     rawEffort && validEffortValues.includes(rawEffort as ThinkingEffort)
       ? (rawEffort as ThinkingEffort)
+      : "high";
+
+  // Non-Anthropic reasoning_effort (default "high")
+  const validReasoningValues: ReasoningEffort[] = ["high", "low", "medium", "minimal"];
+  const rawReasoning = config.get<string>("reasoningEffort");
+  const reasoningEffort: ReasoningEffort =
+    rawReasoning && validReasoningValues.includes(rawReasoning as ReasoningEffort)
+      ? (rawReasoning as ReasoningEffort)
       : "high";
 
   return {
@@ -125,9 +160,10 @@ export async function getBedrockSettings(globalState: vscode.Memento): Promise<B
     promptCaching: {
       enabled: promptCachingEnabled,
     },
+    reasoningEffort,
     region,
     thinking: {
-      budgetTokens: Math.max(1024, thinkingBudgetTokens), // Ensure minimum 1024
+      budgetTokens: Math.max(1024, thinkingBudgetTokens),
       effort: thinkingEffort,
       enabled: thinkingEnabled,
     },

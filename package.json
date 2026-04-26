@@ -6,9 +6,9 @@
   "icon": "assets/logo.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tinovyatkin/amazon-bedrock-copilot-chat"
+    "url": "https://github.com/rangan2510/aws-bedrock-for-copilot"
   },
-  "version": "0.11.0",
+  "version": "0.11.1",
   "engines": {
     "vscode": "^1.116.0"
   },
@@ -21,7 +21,7 @@
     "theme": "dark"
   },
   "bugs": {
-    "url": "https://github.com/tinovyatkin/amazon-bedrock-copilot-chat/issues"
+    "url": "https://github.com/rangan2510/aws-bedrock-for-copilot/issues"
   },
   "license": "MIT",
   "contributes": {
@@ -44,7 +44,75 @@
         "aws-bedrock-for-copilot.region": {
           "type": "string",
           "default": "us-east-1",
-          "description": "AWS region for Amazon Bedrock API calls",
+          "enum": [
+            "us-east-1",
+            "us-east-2",
+            "us-west-2",
+            "ca-central-1",
+            "sa-east-1",
+            "eu-west-1",
+            "eu-west-2",
+            "eu-west-3",
+            "eu-central-1",
+            "eu-north-1",
+            "eu-south-1",
+            "eu-south-2",
+            "ap-south-1",
+            "ap-south-2",
+            "ap-southeast-1",
+            "ap-southeast-2",
+            "ap-southeast-3",
+            "ap-southeast-4",
+            "ap-southeast-5",
+            "ap-southeast-7",
+            "ap-northeast-1",
+            "ap-northeast-2",
+            "ap-northeast-3",
+            "ap-east-1",
+            "me-central-1",
+            "me-south-1",
+            "af-south-1",
+            "il-central-1",
+            "us-gov-west-1",
+            "us-gov-east-1",
+            "cn-north-1",
+            "cn-northwest-1"
+          ],
+          "enumDescriptions": [
+            "US East (N. Virginia)",
+            "US East (Ohio)",
+            "US West (Oregon)",
+            "Canada (Central)",
+            "South America (São Paulo)",
+            "Europe (Ireland)",
+            "Europe (London)",
+            "Europe (Paris)",
+            "Europe (Frankfurt)",
+            "Europe (Stockholm)",
+            "Europe (Milan)",
+            "Europe (Spain)",
+            "Asia Pacific (Mumbai)",
+            "Asia Pacific (Hyderabad)",
+            "Asia Pacific (Singapore)",
+            "Asia Pacific (Sydney)",
+            "Asia Pacific (Jakarta)",
+            "Asia Pacific (Melbourne)",
+            "Asia Pacific (Malaysia)",
+            "Asia Pacific (Thailand)",
+            "Asia Pacific (Tokyo)",
+            "Asia Pacific (Seoul)",
+            "Asia Pacific (Osaka)",
+            "Asia Pacific (Hong Kong)",
+            "Middle East (UAE)",
+            "Middle East (Bahrain)",
+            "Africa (Cape Town)",
+            "Israel (Tel Aviv)",
+            "AWS GovCloud (US-West)",
+            "AWS GovCloud (US-East)",
+            "China (Beijing)",
+            "China (Ningxia)"
+          ],
+          "description": "AWS region for Amazon Bedrock API calls. Bedrock model availability varies by region -- see https://docs.aws.amazon.com/bedrock/latest/userguide/models-regions.html",
           "scope": "resource"
         },
         "aws-bedrock-for-copilot.profile": {
@@ -65,51 +133,73 @@
           "description": "Preferred Amazon Bedrock model ID to use by default (e.g., 'anthropic.claude-3-5-sonnet-20241022-v2:0'). Leave empty to let Copilot choose.",
           "scope": "resource"
         },
-        "aws-bedrock-for-copilot.thinking.enabled": {
+        "aws-bedrock-for-copilot.anthropic.thinking.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable extended thinking for supported Anthropic Claude models (Opus 4.1, Opus 4, Sonnet 4.6, Sonnet 4.5, Sonnet 4, Sonnet 3.7). Allows models to reason through complex tasks before responding.",
+          "description": "Enable extended thinking for supported Anthropic Claude models (Opus 4.x, Sonnet 4.x, Sonnet 3.7, Haiku 4.5). Allows models to reason through complex tasks before responding.",
           "scope": "resource"
         },
-        "aws-bedrock-for-copilot.thinking.budgetTokens": {
+        "aws-bedrock-for-copilot.anthropic.thinking.budgetTokens": {
           "type": "number",
           "default": 10000,
           "minimum": 1024,
-          "description": "Number of tokens allocated for thinking. Minimum 1024. Note: For Anthropic Claude models, this is automatically calculated as 20% of the model's maximum output tokens and this setting is ignored.",
+          "description": "Tokens allocated for thinking on Claude models that use enabled+budget thinking (Opus 4.5, 4.1, 4, Sonnet 4.5, 4, 3.7, Haiku 4.5). For Claude Opus 4.6/4.7 and Sonnet 4.6 the budget is auto-managed via adaptive thinking and this setting is ignored.",
           "scope": "resource"
         },
-        "aws-bedrock-for-copilot.thinking.effort": {
+        "aws-bedrock-for-copilot.anthropic.thinking.effort": {
           "type": "string",
           "default": "high",
           "enum": [
-            "high",
+            "low",
             "medium",
-            "low"
+            "high",
+            "xhigh",
+            "max"
           ],
           "enumDescriptions": [
-            "Maximum capability—Claude uses as many tokens as needed for the best possible outcome. Recommended for complex reasoning and difficult coding problems.",
+            "Most efficient. Significant token savings with some capability reduction. Best for simpler tasks that need speed and lowest costs.",
             "Balanced approach with moderate token savings. Good for tasks requiring a balance of speed, cost, and performance.",
-            "Most efficient—significant token savings with some capability reduction. Best for simpler tasks that need speed and lowest costs."
+            "Maximum capability (default). Claude uses as many tokens as needed for excellent results. Recommended for complex reasoning and coding.",
+            "Extended capability for long-horizon agentic work (Opus 4.7 only). Falls back to 'high' on other models. Use with large max_tokens for coding/agentic tasks.",
+            "Absolute maximum capability with no constraints on token spending (Opus 4.6, 4.7, Sonnet 4.6 only). Falls back to 'high' on other models."
           ],
-          "description": "Thinking effort level for Claude Opus 4.5 and Sonnet 4.6. Controls how eager Claude is about spending tokens when responding. Higher effort = better quality but more tokens.",
+          "description": "Thinking effort level for adaptive-thinking Claude models (Opus 4.6, 4.7, Sonnet 4.6). Controls how eager Claude is about spending tokens. Some levels are model-gated; unsupported levels fall back to 'high'.",
           "scope": "resource"
         },
-        "aws-bedrock-for-copilot.context1M.enabled": {
+        "aws-bedrock-for-copilot.anthropic.context1M.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable 1M context window for Claude Sonnet 4.x and Opus 4.6 models. When enabled, these models can handle up to 1 million tokens of input context. Note: Using 1M context increases API costs.",
+          "description": "Enable 1M context window for Claude Opus 4.6 and Sonnet 4.6. (Opus 4.7 always uses 1M.) When enabled, these models can handle up to 1 million tokens of input context. Note: 1M context costs more.",
+          "scope": "resource"
+        },
+        "aws-bedrock-for-copilot.anthropic.inferenceProfiles.preferRegional": {
+          "type": "boolean",
+          "default": false,
+          "description": "Prefer regional inference profiles over global ones for Anthropic Claude models. Enable this if your policies restrict access to global inference profiles. When enabled, the extension uses regional profiles (e.g., us.anthropic.claude-opus-4-6-v1) instead of global (e.g., global.anthropic.claude-opus-4-6-v1).",
+          "scope": "resource"
+        },
+        "aws-bedrock-for-copilot.reasoningEffort": {
+          "type": "string",
+          "default": "high",
+          "enum": [
+            "minimal",
+            "low",
+            "medium",
+            "high"
+          ],
+          "enumDescriptions": [
+            "Lowest reasoning, fastest responses (OpenAI gpt-oss only -- silently rejected by other vendors and falls back to 'low').",
+            "Conservative reasoning. Faster, cheaper.",
+            "Balanced reasoning depth and latency.",
+            "Default. Most thorough reasoning, best quality."
+          ],
+          "description": "Reasoning effort sent as `reasoning_effort` for non-Anthropic models that support it (OpenAI gpt-oss, DeepSeek V3.2, Moonshot Kimi K2.5/K2 Thinking, Qwen3, Z.AI GLM, MiniMax M2.x). Silently ignored on models that don't support reasoning. Anthropic Claude uses its own `anthropic.thinking.effort` setting instead.",
           "scope": "resource"
         },
         "aws-bedrock-for-copilot.promptCaching.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable prompt caching for supported models to reduce latency and costs. Caches system prompts, tool definitions, and recent tool results. Disable if you need fully fresh responses or want to avoid cache-related costs.",
-          "scope": "resource"
-        },
-        "aws-bedrock-for-copilot.inferenceProfiles.preferRegional": {
-          "type": "boolean",
-          "default": false,
-          "description": "Prefer regional inference profiles over global ones. Enable this if your policies restrict access to global inference profiles. When enabled, the extension will use regional inference profiles (e.g., eu.anthropic.claude-opus-4-6-v1) instead of global ones (e.g., global.anthropic.claude-opus-4-6-v1).",
+          "description": "Enable prompt caching for supported models (Claude and Nova) to reduce latency and costs. Caches system prompts, tool definitions, and recent tool results. Disable if you need fully fresh responses or want to avoid cache-related costs.",
           "scope": "resource"
         }
       }
