@@ -1,4 +1,14 @@
-# AWS Bedrock for Copilot
+<p align="center">
+  <img src="assets/logo.png" alt="AWS Bedrock for Copilot" width="128" />
+</p>
+
+<h1 align="center">AWS Bedrock for Copilot</h1>
+
+<p align="center">
+  <a href="https://github.com/rangan2510/aws-bedrock-for-copilot/releases/latest"><img src="https://img.shields.io/github/v/release/rangan2510/aws-bedrock-for-copilot?label=release" alt="Latest Release" /></a>
+  <a href="https://github.com/rangan2510/aws-bedrock-for-copilot/blob/main/LICENSE"><img src="https://img.shields.io/github/license/rangan2510/aws-bedrock-for-copilot" alt="License" /></a>
+  <a href="https://github.com/rangan2510/aws-bedrock-for-copilot"><img src="https://img.shields.io/github/stars/rangan2510/aws-bedrock-for-copilot?style=social" alt="Stars" /></a>
+</p>
 
 This is a development fork of [amazon-bedrock-copilot-chat](https://github.com/tinovyatkin/amazon-bedrock-copilot-chat) by [@tinovyatkin](https://github.com/tinovyatkin). All the foundational work -- the provider architecture, streaming, authentication, message conversion -- is from the original project. This fork exists for quick bugfixes and enhancements for internal use, and runs **alongside** the upstream extension without conflicts.
 
@@ -10,7 +20,9 @@ Fixes and enhancements over the upstream `v0.11.0`:
 
 - **Claude Opus 4.7 support**: Handles the new `thinking.type: "adaptive"` API requirement and the deprecated `temperature` parameter that Opus 4.7 introduced
 - **Correct thinking modes per model**: CLI-verified thinking configuration for every Claude generation -- adaptive for Opus 4.7, enabled+budget for 4.5/4.1/4/3.7/Haiku 4.5, both for 4.6 models
+- **Correct token limits**: Opus 4.7 gets 1M context / 128K output, Opus 4.1/4 corrected to 32K output, per Anthropic docs
 - **Haiku 4.5 extended thinking**: Added missing thinking support for Claude Haiku 4.5
+- **Graceful tool_use fallback**: Models that return unparseable tool JSON no longer crash -- shows a helpful message instead
 - **Expanded provider profiles**: CLI-verified tool calling and vision support for 80+ models across 14 providers (Qwen, Kimi, GLM, MiniMax, NVIDIA, Gemma, DeepSeek, Writer, Cohere, AI21, and more)
 - **Parallel extension identity**: Runs as `aws-bedrock-for-copilot` vendor with its own config namespace (`aws-bedrock-for-copilot.*`), so it can be installed next to the upstream `bedrock` extension
 
@@ -22,7 +34,7 @@ Fixes and enhancements over the upstream `v0.11.0`:
 - **Tool calling**: Full function calling support, required for Copilot Chat features like `@workspace` and `@terminal`
 - **Cross-region inference**: Automatic support for regional and global inference profiles
 - **Extended thinking**: Automatic thinking configuration per model generation -- adaptive thinking for Opus 4.7, enabled+budget for older models, with configurable effort levels for supported models
-- **1M context window**: Optional 1M token context for Claude Sonnet 4.x and Opus 4.6 (configurable in settings)
+- **1M context window**: Always-on 1M context for Opus 4.7; optional 1M for Opus 4.6 and Sonnet 4.6 (configurable in settings)
 - **Prompt caching**: Automatic caching of system prompts, tool definitions, and conversation history (Claude and Nova models)
 - **Vision**: Image input support for models that declare IMAGE modality
 
@@ -88,11 +100,11 @@ For a model to work with GitHub Copilot Chat, it must support **tool calling** (
 
 | Model             | Model ID                                    | Vision | Tools | Thinking                     | Notes                                                |
 | ----------------- | ------------------------------------------- | ------ | ----- | ---------------------------- | ---------------------------------------------------- |
-| Claude Opus 4.7   | `anthropic.claude-opus-4-7`                 | Yes    | Yes   | adaptive + effort            | No temperature, requires `thinking.type: "adaptive"` |
-| Claude Opus 4.6   | `anthropic.claude-opus-4-6-v1`              | Yes    | Yes   | enabled or adaptive + effort | 128K max output, 1M context optional                 |
-| Claude Opus 4.5   | `anthropic.claude-opus-4-5-20251101-v1:0`   | Yes    | Yes   | enabled + budget             | No effort support                                    |
-| Claude Opus 4.1   | `anthropic.claude-opus-4-1-20250805-v1:0`   | Yes    | Yes   | enabled + budget             |                                                      |
-| Claude Opus 4     | `anthropic.claude-opus-4-20250514-v1:0`     | Yes    | Yes   | enabled + budget             |                                                      |
+| Claude Opus 4.7   | `anthropic.claude-opus-4-7`                 | Yes    | Yes   | adaptive + effort            | 1M context, 128K output, no temperature              |
+| Claude Opus 4.6   | `anthropic.claude-opus-4-6-v1`              | Yes    | Yes   | enabled or adaptive + effort | 1M context optional, 128K output                     |
+| Claude Opus 4.5   | `anthropic.claude-opus-4-5-20251101-v1:0`   | Yes    | Yes   | enabled + budget             | 200K context, 64K output, no effort                  |
+| Claude Opus 4.1   | `anthropic.claude-opus-4-1-20250805-v1:0`   | Yes    | Yes   | enabled + budget             | 200K context, 32K output                             |
+| Claude Opus 4     | `anthropic.claude-opus-4-20250514-v1:0`     | Yes    | Yes   | enabled + budget             | 200K context, 32K output (deprecated June 2026)      |
 | Claude Sonnet 4.6 | `anthropic.claude-sonnet-4-6`               | Yes    | Yes   | enabled or adaptive + effort | 64K max output, 1M context optional                  |
 | Claude Sonnet 4.5 | `anthropic.claude-sonnet-4-5-20250929-v1:0` | Yes    | Yes   | enabled + budget             | No effort support                                    |
 | Claude Sonnet 4   | `anthropic.claude-sonnet-4-20250514-v1:0`   | Yes    | Yes   | enabled + budget             |                                                      |

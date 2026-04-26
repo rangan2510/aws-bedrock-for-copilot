@@ -19,6 +19,7 @@ bun*
 .*
 .github
 docs/
+scripts/
 *.chatreplay.json
 renovate.json
 !README.md
