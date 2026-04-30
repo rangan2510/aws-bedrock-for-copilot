@@ -47,6 +47,11 @@ export class BedrockAPIClient {
   // Cache for inference profile ID -> base model ID mappings
   // This avoids repeated API calls to GetInferenceProfile
   private readonly inferenceProfileCache = new Map<string, string>();
+  // Models/profiles for which Bedrock CountTokens is known to be unsupported.
+  // VS Code calls provideTokenCount many times while assembling a single chat
+  // request, so retrying CountTokens after a known unsupported response causes
+  // visible stalls and noisy logs.
+  private readonly unsupportedCountTokensModelIds = new Set<string>();
   private readonly profileCredentialsProviders = new Map<string, AwsCredentialIdentityProvider>();
   private profileName?: string;
 
@@ -75,9 +80,24 @@ export class BedrockAPIClient {
     input: CountTokensCommandInput["input"],
     abortSignal?: AbortSignal,
   ): Promise<number | undefined> {
+    let baseModelId: string | undefined;
+
     try {
+      if (this.unsupportedCountTokensModelIds.has(modelId)) {
+        logger.trace(`[Bedrock API Client] Skipping CountTokens for unsupported model ${modelId}`);
+        return undefined;
+      }
+
       // Resolve the base model ID (uses GetInferenceProfile API for cross-region profiles)
-      const baseModelId = await this.resolveModelId(modelId, abortSignal);
+      baseModelId = await this.resolveModelId(modelId, abortSignal);
+
+      if (this.unsupportedCountTokensModelIds.has(baseModelId)) {
+        this.unsupportedCountTokensModelIds.add(modelId);
+        logger.trace(
+          `[Bedrock API Client] Skipping CountTokens for unsupported base model ${baseModelId}`,
+        );
+        return undefined;
+      }
 
       const command = new CountTokensCommand({
         input,
@@ -108,10 +128,13 @@ export class BedrockAPIClient {
 
       // If the CountTokens API is not supported for this model/region, return undefined
       // The caller should fall back to estimation
-      logger.debug(
-        `[Bedrock API Client] CountTokens not available for model ${modelId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+      this.unsupportedCountTokensModelIds.add(modelId);
+      if (typeof baseModelId === "string") {
+        this.unsupportedCountTokensModelIds.add(baseModelId);
+      }
+      logger.trace(
+        `[Bedrock API Client] CountTokens not available for model ${modelId}; future calls will use estimation`,
+        error instanceof Error ? error.message : String(error),
       );
       return undefined;
     }

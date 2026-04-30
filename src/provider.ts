@@ -220,13 +220,11 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
             const vision = m.inputModalities.includes(ModelModality.IMAGE);
             const lifecycleStatus = m.modelLifecycle?.status;
 
-            // Determine tooltip suffix based on inference profile type
-            let profileSuffix = "";
-            if (hasInferenceProfile) {
-              profileSuffix = modelIdToUse.startsWith("global.")
-                ? " (Global Inference Profile)"
-                : " (Regional Inference Profile)";
-            }
+            const route = hasInferenceProfile
+              ? modelIdToUse.startsWith("global.")
+                ? "Global inference profile"
+                : "Local/regional inference profile"
+              : "Direct foundation model";
 
             const modelInfo: LanguageModelChatInformation = {
               capabilities: {
@@ -244,7 +242,7 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
                 maxInput,
                 maxOutput,
                 modelId: modelIdToUse,
-                profileSuffix,
+                route,
                 providerName: m.providerName,
                 vision,
               }),
@@ -300,7 +298,7 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
                 maxInput,
                 maxOutput,
                 modelId: modelIdForLimits,
-                profileSuffix: " (Application Inference Profile)",
+                route: "Application inference profile",
                 providerName: profile.providerName,
                 vision,
               }),
@@ -768,8 +766,9 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
           return tokenCount;
         }
 
-        // Fall back to estimation if CountTokens is not available
-        logger.debug("[Bedrock Model Provider] CountTokens not available, using estimation");
+        // Fall back to estimation if CountTokens is not available.
+        // provideTokenCount is called many times per Copilot turn; keep this at trace.
+        logger.trace("[Bedrock Model Provider] CountTokens not available, using estimation");
         return estimateTokens(text);
       } finally {
         cancellationListener.dispose();
@@ -835,11 +834,13 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
     maxInput: number;
     maxOutput: number;
     vision: boolean;
-    profileSuffix: string;
+    route: string;
     lifecycleStatus?: string;
   }): string {
     const profile = getModelProfile(args.modelId);
-    const lines: string[] = [`AWS Bedrock - ${args.providerName}${args.profileSuffix}`];
+    const lines: string[] = [`AWS Bedrock - ${args.providerName}`];
+    lines.push(`Route: ${args.route}`);
+    lines.push(`Model ID: ${args.modelId}`);
 
     if (args.lifecycleStatus === "LEGACY") {
       lines.push(
@@ -982,7 +983,7 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
           maxInput: limits.maxInputTokens,
           maxOutput: limits.maxOutputTokens,
           modelId: baseModelId,
-          profileSuffix: " (manual entry)",
+          route: "Manual entry",
           providerName: "Bedrock",
           vision: likelyVisionCapable,
         }),
