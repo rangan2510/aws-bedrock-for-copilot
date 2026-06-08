@@ -14,6 +14,12 @@ This changelog is split into two sections:
 
 ## Fork changelog (`rangan2510/aws-bedrock-for-copilot`)
 
+### [0.12.0-fork.8] - 2026-06-08
+
+#### Fixed
+
+- **`*(The model returned an empty response. Please try again or rephrase your request.)*` shown after every successful agentic-loop completion.** When VS Code Copilot Chat runs a tool that the model called in turn N, it re-prompts the model for turn N+1. Claude often has nothing more to say in turn N+1 (the work was done by the tool result returned to it) and finishes with a normal `end_turn` containing zero text and zero tool calls. The previous fallback gate treated this as an error and emitted a misleading "(The model returned an empty response...)" message in the chat, even though turn N already showed real output. After the fork.7 fix, this no longer poisoned future turns, but it still cluttered every multi-step agentic conversation with the misleading message. Fix: detect this exact case (zero content, zero thinking, normal `end_turn`) and emit a visually-invisible sentinel-only text part instead of the verbose fallback. VS Code sees the `progress.report()` so does not error with "Sorry, no response was returned"; the user sees an empty bubble; and the message converter (using the existing fork.7 `isFallback` machinery) strips the sentinel part from history before the next turn so it does not poison Bedrock either. Logged at `info` level instead of `warn` since this is normal agentic termination.
+
 ### [0.12.0-fork.7] - 2026-06-08
 
 #### Fixed

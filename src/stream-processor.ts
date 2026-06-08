@@ -1,8 +1,8 @@
 import type {
-    ConverseStreamOutput,
-    GuardrailAssessment,
-    GuardrailTraceAssessment,
-    ReasoningContentBlockDelta,
+  ConverseStreamOutput,
+  GuardrailAssessment,
+  GuardrailTraceAssessment,
+  ReasoningContentBlockDelta,
 } from "@aws-sdk/client-bedrock-runtime";
 import { GuardrailContentPolicyAction, StopReason } from "@aws-sdk/client-bedrock-runtime";
 import * as vscode from "vscode";
@@ -97,13 +97,10 @@ export class StreamProcessor {
         !token.isCancellationRequested &&
         state.stopReason === StopReason.MAX_TOKENS
       ) {
-        logger.warn(
-          "[Stream Processor] Model hit max_tokens with no visible output",
-          {
-            hasCapturedThinking: !!state.capturedThinkingBlock?.text,
-            thinkingLength: state.capturedThinkingBlock?.text.length ?? 0,
-          },
-        );
+        logger.warn("[Stream Processor] Model hit max_tokens with no visible output", {
+          hasCapturedThinking: !!state.capturedThinkingBlock?.text,
+          thinkingLength: state.capturedThinkingBlock?.text.length ?? 0,
+        });
         progress.report(
           new vscode.LanguageModelTextPart(
             wrapFallback(
@@ -116,9 +113,21 @@ export class StreamProcessor {
       }
 
       // For genuinely empty responses (no thinking, no text, no tools) with a
-      // normal end_turn stop reason, emit a friendly fallback message instead of
-      // throwing a hard error.  This is a known LLM edge case that can happen
-      // when the model has nothing to say or encounters an internal issue.
+      // normal end_turn stop reason, complete silently. This is a normal
+      // termination signal in agentic loops: after a tool_use turn, VS Code
+      // Copilot Chat runs the tool and re-prompts the model; the model often
+      // legitimately has nothing more to say and ends with a 0-token reply.
+      //
+      // Emitting a visible "(The model returned an empty response...)" message
+      // here is misleading -- the previous turn already showed real output and
+      // the model is simply finishing the agentic loop cleanly. But emitting
+      // *nothing* triggers VS Code's generic "Sorry, no response was returned"
+      // error.
+      //
+      // Compromise: emit a sentinel-only (visually invisible) text part. VS
+      // Code sees the progress.report() and does not error; the user sees a
+      // visually-empty bubble; and the message converter strips the sentinel
+      // part on subsequent turns so it does not poison the conversation.
       if (
         !state.hasEmittedContent &&
         !state.hasEmittedThinking &&
@@ -126,17 +135,13 @@ export class StreamProcessor {
         !token.isCancellationRequested &&
         state.stopReason === StopReason.END_TURN
       ) {
-        logger.warn(
-          "[Stream Processor] Model returned empty response with stop reason:",
-          state.stopReason,
+        logger.info(
+          "[Stream Processor] Model finished with end_turn but produced no visible content (likely normal agentic-loop termination)",
+          { eventCount: state.eventCount },
         );
-        progress.report(
-          new vscode.LanguageModelTextPart(
-            wrapFallback(
-              "*(The model returned an empty response. Please try again or rephrase your request.)*",
-            ),
-          ),
-        );
+        // Sentinel-only text part: visually invisible and stripped from
+        // history before the next turn.
+        progress.report(new vscode.LanguageModelTextPart(wrapFallback("")));
         state.hasEmittedContent = true;
       }
 
@@ -170,14 +175,10 @@ export class StreamProcessor {
         (state.stopReason === StopReason.MALFORMED_MODEL_OUTPUT ||
           state.stopReason === StopReason.MALFORMED_TOOL_USE)
       ) {
-        logger.warn(
-          "[Stream Processor] Model produced malformed output, no content emitted",
-          { stopReason: state.stopReason },
-        );
-        const reason =
-          state.stopReason === StopReason.MALFORMED_TOOL_USE
-            ? "tool call"
-            : "output";
+        logger.warn("[Stream Processor] Model produced malformed output, no content emitted", {
+          stopReason: state.stopReason,
+        });
+        const reason = state.stopReason === StopReason.MALFORMED_TOOL_USE ? "tool call" : "output";
         progress.report(
           new vscode.LanguageModelTextPart(
             wrapFallback(
@@ -193,11 +194,7 @@ export class StreamProcessor {
       // handlers matched, emit a generic fallback rather than letting
       // validateContentEmission throw a hard error that VS Code shows as
       // "Sorry, no response was returned".
-      if (
-        !state.hasEmittedContent &&
-        !state.hasEmittedThinking &&
-        !token.isCancellationRequested
-      ) {
+      if (!state.hasEmittedContent && !state.hasEmittedThinking && !token.isCancellationRequested) {
         const isEmptyStream = state.eventCount === 0;
         logger.warn(
           isEmptyStream
@@ -213,8 +210,8 @@ export class StreamProcessor {
             wrapFallback(
               isEmptyStream
                 ? "*(The server closed the streaming connection without sending any data. " +
-                  "This can happen with very large requests or transient AWS Bedrock issues. " +
-                  "Please try again, or start a new conversation if the problem persists.)*"
+                    "This can happen with very large requests or transient AWS Bedrock issues. " +
+                    "Please try again, or start a new conversation if the problem persists.)*"
                 : "*(The model did not produce a response. Please try again or rephrase your request.)*",
             ),
           ),
