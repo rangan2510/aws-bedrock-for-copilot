@@ -8,6 +8,7 @@ import { GuardrailContentPolicyAction, StopReason } from "@aws-sdk/client-bedroc
 import * as vscode from "vscode";
 import { type CancellationToken, type LanguageModelResponsePart2, type Progress } from "vscode";
 
+import { wrapFallback } from "./fallback-marker";
 import { logger } from "./logger";
 import { ToolBuffer } from "./tool-buffer";
 
@@ -79,7 +80,9 @@ export class StreamProcessor {
         );
         progress.report(
           new vscode.LanguageModelTextPart(
-            "*(The model produced only internal reasoning, but the thinking display is not supported in this environment. Please try again or rephrase your request.)*",
+            wrapFallback(
+              "*(The model produced only internal reasoning, but the thinking display is not supported in this environment. Please try again or rephrase your request.)*",
+            ),
           ),
         );
         state.hasEmittedContent = true;
@@ -103,8 +106,10 @@ export class StreamProcessor {
         );
         progress.report(
           new vscode.LanguageModelTextPart(
-            "*(The model exhausted its token budget on internal reasoning without producing a visible response. " +
-              "This can happen in long conversations. Please try starting a new conversation or rephrasing your request.)*",
+            wrapFallback(
+              "*(The model exhausted its token budget on internal reasoning without producing a visible response. " +
+                "This can happen in long conversations. Please try starting a new conversation or rephrasing your request.)*",
+            ),
           ),
         );
         state.hasEmittedContent = true;
@@ -127,7 +132,9 @@ export class StreamProcessor {
         );
         progress.report(
           new vscode.LanguageModelTextPart(
-            "*(The model returned an empty response. Please try again or rephrase your request.)*",
+            wrapFallback(
+              "*(The model returned an empty response. Please try again or rephrase your request.)*",
+            ),
           ),
         );
         state.hasEmittedContent = true;
@@ -146,7 +153,9 @@ export class StreamProcessor {
         );
         progress.report(
           new vscode.LanguageModelTextPart(
-            "*(The model attempted a tool call but the response could not be processed. This model may have limited tool calling support. Please try again or use a different model.)*",
+            wrapFallback(
+              "*(The model attempted a tool call but the response could not be processed. This model may have limited tool calling support. Please try again or use a different model.)*",
+            ),
           ),
         );
         state.hasEmittedContent = true;
@@ -171,8 +180,10 @@ export class StreamProcessor {
             : "output";
         progress.report(
           new vscode.LanguageModelTextPart(
-            `*(The model produced a malformed ${reason} that could not be parsed. ` +
-              "This is often transient -- please try again or rephrase your request.)*",
+            wrapFallback(
+              `*(The model produced a malformed ${reason} that could not be parsed. ` +
+                "This is often transient -- please try again or rephrase your request.)*",
+            ),
           ),
         );
         state.hasEmittedContent = true;
@@ -199,11 +210,13 @@ export class StreamProcessor {
         );
         progress.report(
           new vscode.LanguageModelTextPart(
-            isEmptyStream
-              ? "*(The server closed the streaming connection without sending any data. " +
-                "This can happen with very large requests or transient AWS Bedrock issues. " +
-                "Please try again, or start a new conversation if the problem persists.)*"
-              : "*(The model did not produce a response. Please try again or rephrase your request.)*",
+            wrapFallback(
+              isEmptyStream
+                ? "*(The server closed the streaming connection without sending any data. " +
+                  "This can happen with very large requests or transient AWS Bedrock issues. " +
+                  "Please try again, or start a new conversation if the problem persists.)*"
+                : "*(The model did not produce a response. Please try again or rephrase your request.)*",
+            ),
           ),
         );
         state.hasEmittedContent = true;

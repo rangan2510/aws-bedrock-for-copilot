@@ -10,6 +10,7 @@ import type { DocumentType } from "@smithy/types";
 import { inspect, MIMEType, types } from "node:util";
 import * as vscode from "vscode";
 
+import { isFallback } from "../fallback-marker";
 import { logger } from "../logger";
 import { getModelProfile, type ModelProfile } from "../profiles";
 import type { ThinkingBlock } from "../stream-processor";
@@ -494,6 +495,12 @@ function processSystemMessageParts(msg: vscode.LanguageModelChatMessage): System
 
   for (const part of msg.content) {
     if (part instanceof vscode.LanguageModelTextPart && part.value.trim()) {
+      // Defensive: a fallback should never appear in a system message, but if
+      // VS Code ever routes one here we still strip it.
+      if (isFallback(part.value)) {
+        logger.debug("[Message Converter] Skipping fallback in system message");
+        continue;
+      }
       systemBlocks.push({ text: part.value });
     } else if (isMetadataPart(part)) {
       logger.trace("[Message Converter] Skipping metadata part in system message:", {
@@ -511,6 +518,13 @@ function processSystemMessageParts(msg: vscode.LanguageModelChatMessage): System
 function processTextPart(part: vscode.LanguageModelTextPart): ContentBlock | null {
   // Skip empty text parts - Bedrock API rejects blank text fields
   if (!part.value.trim()) {
+    return null;
+  }
+  // Skip our own fallback messages so they don't poison subsequent turns
+  // by acting as few-shot examples that teach the model to imitate them.
+  // See src/fallback-marker.ts for context.
+  if (isFallback(part.value)) {
+    logger.debug("[Message Converter] Skipping fallback assistant message from history");
     return null;
   }
   return { text: part.value };

@@ -14,6 +14,12 @@ This changelog is split into two sections:
 
 ## Fork changelog (`rangan2510/aws-bedrock-for-copilot`)
 
+### [0.12.0-fork.7] - 2026-06-08
+
+#### Fixed
+
+- **Self-replicating `*(The model returned an empty response. Please try again or rephrase your request.)*` messages.** When the stream processor emits a fallback message (e.g. for genuine empty `end_turn` responses, `MAX_TOKENS` on thinking-only output, malformed tool calls, etc.), VS Code stores it in the chat history as an assistant turn. The provider then replayed that history on every subsequent turn, where Bedrock saw the fallback strings as few-shot examples and started imitating them -- producing 22-token assistant turns containing nothing but the literal fallback text, even though no fallback gate fired in the current turn. The user-visible symptom: every retry stamps another copy of the message into the conversation, and the model echoes them back forever. Fix: every fallback emission is now prefixed with an invisible `\u200B\u2063\u200B` sentinel, and `processTextPart` / `processSystemMessageParts` in the message converter strip these parts when replaying assistant history to Bedrock. Already-poisoned conversations recover automatically because the converter also matches the legacy unmarked fallback bodies by exact text. New file: `src/fallback-marker.ts`.
+
 ### [0.12.0-fork.6] - 2026-05-29
 
 #### Fixed
