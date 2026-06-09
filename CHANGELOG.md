@@ -14,6 +14,12 @@ This changelog is split into two sections:
 
 ## Fork changelog (`rangan2510/aws-bedrock-for-copilot`)
 
+### [0.12.0-fork.9] - 2026-06-09
+
+#### Fixed
+
+- **`ValidationException: The image was specified using the image/jpeg media type, but the image appears to be a image/png image` (and vice versa) when pasting screenshots.** VS Code's chat surface delivers `ImageDataPart`-like content with a `mimeType` field that is not always accurate -- on Windows in particular, the OS clipboard often advertises `image/jpeg` but delivers PNG bytes (or vice versa) when a user pastes a screenshot. The previous converter trusted the declared `mimeType` and Bedrock then rejected the request because it validates the bytes, not the declared MIME. New file `src/converters/image-format.ts` sniffs the actual format from the well-known magic-byte signatures (PNG `89 50 4E 47 0D 0A 1A 0A`, JPEG `FF D8 FF`, GIF `47 49 46 38`, WebP `RIFF....WEBP`); `processImagePart` now uses the detected format (falling back to the declared MIME only if detection fails) and logs a warning when the two disagree. Images with bytes that don't match any known signature are dropped instead of being sent and rejected.
+
 ### [0.12.0-fork.8] - 2026-06-08
 
 #### Fixed

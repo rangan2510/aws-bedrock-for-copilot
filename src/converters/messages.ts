@@ -14,6 +14,11 @@ import { isFallback } from "../fallback-marker";
 import { logger } from "../logger";
 import { getModelProfile, type ModelProfile } from "../profiles";
 import type { ThinkingBlock } from "../stream-processor";
+import {
+  type BedrockImageFormat,
+  declaredFormatToBedrock,
+  detectImageFormat,
+} from "./image-format";
 
 interface ConvertedMessages {
   messages: BedrockMessage[];
@@ -457,26 +462,20 @@ function processAssistantMessageParts(msg: vscode.LanguageModelChatMessage): Con
 }
 
 /**
- * Process image data part from message content
+ * Process image data part from message content.
+ *
+ * Resolves the actual image format by inspecting the leading magic bytes
+ * (see `./image-format.ts`). The declared `part.mimeType` is unreliable --
+ * Windows clipboard paste in particular often advertises one MIME type but
+ * delivers bytes in another, which causes Bedrock to reject the request
+ * with `ValidationException: ... appears to be a image/<other> image`.
  */
 function processImagePart(part: ImageDataPart, role: ConversationRole): ContentBlock | null {
+  let declared: BedrockImageFormat | undefined;
   try {
     const mime = new MIMEType(part.mimeType);
     if (mime.type === "image") {
-      const format = mime.subtype.toLowerCase();
-      if (format === "png" || format === "jpeg" || format === "gif" || format === "webp") {
-        logger.debug(`[Message Converter] Added image block to ${role} message`, { format });
-        return {
-          image: {
-            format,
-            source: {
-              bytes: part.data,
-            },
-          },
-        } satisfies ContentBlock.ImageMember;
-      } else {
-        logger.warn(`[Message Converter] Unsupported image format in ${role} message`, { format });
-      }
+      declared = declaredFormatToBedrock(mime.subtype);
     }
   } catch (error) {
     logger.warn(`[Message Converter] Invalid MIME type in ${role} message`, {
@@ -484,7 +483,49 @@ function processImagePart(part: ImageDataPart, role: ConversationRole): ContentB
       mimeType: part.mimeType,
     });
   }
-  return null;
+
+  const detected = detectImageFormat(part.data);
+
+  // Prefer the magic-byte signature -- Bedrock validates the bytes, not the
+  // declared MIME, so any mismatch must be reconciled in favour of the bytes.
+  const format = detected ?? declared;
+
+  if (!format) {
+    logger.warn(`[Message Converter] Unrecognised image bytes in ${role} message; dropping part`, {
+      bytePrefix: Array.from(part.data.slice(0, 8))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join(" "),
+      declaredMimeType: part.mimeType,
+    });
+    return null;
+  }
+
+  if (declared && detected && declared !== detected) {
+    // Common with screenshots pasted on Windows: clipboard advertises image/jpeg
+    // but delivers PNG bytes, or vice versa. Trust the bytes.
+    logger.warn(
+      `[Message Converter] Image MIME mismatch in ${role} message; using detected format`,
+      {
+        declared,
+        detected,
+        mimeType: part.mimeType,
+      },
+    );
+  }
+
+  logger.debug(`[Message Converter] Added image block to ${role} message`, {
+    declared,
+    detected,
+    format,
+  });
+  return {
+    image: {
+      format,
+      source: {
+        bytes: part.data,
+      },
+    },
+  } satisfies ContentBlock.ImageMember;
 }
 
 /**
