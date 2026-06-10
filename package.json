@@ -2,13 +2,13 @@
   "name": "aws-bedrock-for-copilot",
   "publisher": "rangan2510",
   "displayName": "AWS Bedrock for Copilot",
-  "description": "Amazon Bedrock integration using VSCode's official Language Model Chat Provider API. Connects AWS Bedrock models such as Claude (including Opus 4.8), OpenAI OSS, DeepSeek to GitHub Copilot Chat via AWS SDK. Supports streaming, tool calling, and vision.",
+  "description": "Amazon Bedrock integration using VSCode's official Language Model Chat Provider API. Connects AWS Bedrock models such as Claude (including Fable 5 and Opus 4.8), OpenAI OSS, DeepSeek to GitHub Copilot Chat via AWS SDK. Supports streaming, tool calling, and vision.",
   "icon": "assets/logo.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/rangan2510/aws-bedrock-for-copilot"
   },
-  "version": "0.12.0-fork.9",
+  "version": "0.12.0-fork.10",
   "engines": {
     "vscode": "^1.116.0"
   },
@@ -163,13 +163,13 @@
             "Extended capability for long-horizon agentic work (Opus 4.7, 4.8 only). Falls back to 'high' on other models. Use with large max_tokens for coding/agentic tasks.",
             "Absolute maximum capability with no constraints on token spending (Opus 4.6, 4.7, 4.8, Sonnet 4.6 only). Falls back to 'high' on other models."
           ],
-          "description": "Thinking effort level for adaptive-thinking Claude models (Opus 4.6, 4.7, 4.8, Sonnet 4.6). Controls how eager Claude is about spending tokens. Some levels are model-gated; unsupported levels fall back to 'high'.",
+          "description": "Thinking effort level for adaptive-thinking Claude models (Opus 4.6, 4.7, 4.8, Sonnet 4.6, Fable 5). Controls how eager Claude is about spending tokens. Some levels are model-gated; unsupported levels fall back to 'high'.",
           "scope": "resource"
         },
         "aws-bedrock-for-copilot.anthropic.context1M.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable 1M context window for Claude Opus 4.6 and Sonnet 4.6. (Opus 4.7 and 4.8 always use 1M.) When enabled, these models can handle up to 1 million tokens of input context. Note: 1M context costs more.",
+          "description": "Enable 1M context window for Claude Opus 4.6 and Sonnet 4.6. (Opus 4.7, 4.8, and Fable 5 always use 1M.) When enabled, these models can handle up to 1 million tokens of input context. Note: 1M context costs more.",
           "scope": "resource"
         },
         "aws-bedrock-for-copilot.anthropic.inferenceProfiles.preferRegional": {

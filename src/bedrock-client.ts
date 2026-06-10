@@ -1,35 +1,35 @@
 import type { BedrockClientConfig } from "@aws-sdk/client-bedrock";
 import {
-    AccessDeniedException,
-    BedrockClient,
-    GetFoundationModelAvailabilityCommand,
-    GetInferenceProfileCommand,
-    ListFoundationModelsCommand,
-    ModelModality,
-    paginateListInferenceProfiles,
-    ResourceNotFoundException,
+  AccessDeniedException,
+  BedrockClient,
+  GetFoundationModelAvailabilityCommand,
+  GetInferenceProfileCommand,
+  ListFoundationModelsCommand,
+  ModelModality,
+  paginateListInferenceProfiles,
+  ResourceNotFoundException,
 } from "@aws-sdk/client-bedrock";
 import type { BedrockRuntimeClientConfig } from "@aws-sdk/client-bedrock-runtime";
 import {
-    BedrockRuntimeClient,
-    ConverseCommand,
-    ConverseStreamCommand,
-    type ConverseStreamCommandInput,
-    type ConverseStreamOutput,
-    CountTokensCommand,
-    type CountTokensCommandInput,
-    AccessDeniedException as RuntimeAccessDeniedException,
-    ThrottlingException,
-    ValidationException,
+  BedrockRuntimeClient,
+  ConverseCommand,
+  ConverseStreamCommand,
+  type ConverseStreamCommandInput,
+  type ConverseStreamOutput,
+  CountTokensCommand,
+  type CountTokensCommandInput,
+  AccessDeniedException as RuntimeAccessDeniedException,
+  ThrottlingException,
+  ValidationException,
 } from "@aws-sdk/client-bedrock-runtime";
 import { fromIni } from "@aws-sdk/credential-providers";
 import type { AwsCredentialIdentity, AwsCredentialIdentityProvider } from "@aws-sdk/types";
 import { AdaptiveRetryStrategy, DefaultRateLimiter } from "@smithy/util-retry";
 
 import {
-    getPartitionFromRegion,
-    getRegionPrefix,
-    supportsGlobalInferenceProfiles,
+  getPartitionFromRegion,
+  getRegionPrefix,
+  supportsGlobalInferenceProfiles,
 } from "./aws-partition";
 import { getProfileSdkUaAppId } from "./aws-profiles";
 import { getLongRunningRequestHandlerConfig } from "./http-handler";
@@ -512,6 +512,23 @@ export class BedrockAPIClient {
       regionalProfileIds: string[];
     }[] = [
       {
+        // Anthropic's most capable widely-released ("Mythos-class") model.
+        // 1M context, 128K output, adaptive thinking only, vision, tool use.
+        // Requires the AWS account to have opted in to Bedrock data retention
+        // (`provider_data_share`); without that, Converse calls fail with
+        // `ValidationException: data retention mode 'default' is not available
+        // for this model`. We surface the model anyway -- the user gets a clear
+        // error from Bedrock and can flip the account setting.
+        baseModelId: "anthropic.claude-fable-5",
+        displayName: "Claude Fable 5",
+        globalProfileId: hasGlobalProfiles ? "global.anthropic.claude-fable-5" : null,
+        regionalProfileIds: getFable5RegionalProfileIds(
+          this.region,
+          regionPrefix,
+          "anthropic.claude-fable-5",
+        ),
+      },
+      {
         baseModelId: "anthropic.claude-opus-4-8",
         displayName: "Claude Opus 4.8",
         globalProfileId: hasGlobalProfiles ? "global.anthropic.claude-opus-4-8" : null,
@@ -887,6 +904,26 @@ function getClaude47GeoPrefix(region: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Geo prefix for Fable 5 / Mythos 5. As of 2026-06-09 these models only have
+ * `us.` and `eu.` regional inference profiles plus a `global.` profile (no
+ * `jp.` / `au.` regional profiles yet, unlike Opus 4.7/4.8). Returning
+ * undefined for ap-northeast and ap-southeast keeps us off non-existent
+ * profile IDs that would otherwise fail the accessibility probe and waste
+ * GetInferenceProfile calls.
+ */
+function getFable5GeoPrefix(region: string): string | undefined {
+  if ((region.startsWith("us-") && !region.startsWith("us-gov-")) || region.startsWith("ca-")) {
+    return "us";
+  }
+
+  if (region.startsWith("eu-")) {
+    return "eu";
+  }
+
+  return undefined;
+}
+
 function getClaude47RegionalProfileIds(
   region: string,
   defaultRegionPrefix: string,
@@ -894,6 +931,30 @@ function getClaude47RegionalProfileIds(
 ): string[] {
   const prefixes = new Set<string>();
   const geoPrefix = getClaude47GeoPrefix(region);
+
+  if (geoPrefix) {
+    prefixes.add(geoPrefix);
+  }
+  prefixes.add(defaultRegionPrefix);
+
+  return [...prefixes].map((prefix) => `${prefix}.${baseModelId}`);
+}
+
+/**
+ * Build the candidate regional profile IDs for Fable 5 / Mythos 5.
+ * As of launch these models only have `us.` and `eu.` regional profiles
+ * (plus `global.`), so we deliberately do NOT seed the geo prefix in regions
+ * outside us-, ca-, and eu- partitions. The default region prefix is still
+ * added so any future regional rollout (e.g. an `apac.` or `jp.` profile) is
+ * detected automatically by the accessibility probe.
+ */
+function getFable5RegionalProfileIds(
+  region: string,
+  defaultRegionPrefix: string,
+  baseModelId: string,
+): string[] {
+  const prefixes = new Set<string>();
+  const geoPrefix = getFable5GeoPrefix(region);
 
   if (geoPrefix) {
     prefixes.add(geoPrefix);

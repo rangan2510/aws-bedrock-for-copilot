@@ -136,17 +136,22 @@ export function getModelProfile(modelId: string): ModelProfile {
     }
 
     case "anthropic": {
-      // CLI-verified thinking support: Opus 4+, Sonnet 4+, Sonnet 3.7, Haiku 4.5
+      // CLI-verified thinking support: Opus 4+, Sonnet 4+, Sonnet 3.7, Haiku 4.5,
+      // and the Mythos-class Fable/Mythos 5 models (adaptive-thinking-only).
       const supportsThinking =
         modelId.includes("opus-4") ||
         modelId.includes("sonnet-4") ||
         modelId.includes("sonnet-3-7") ||
         modelId.includes("sonnet-3.7") ||
         modelId.includes("haiku-4-5") ||
-        modelId.includes("haiku-4.5");
+        modelId.includes("haiku-4.5") ||
+        modelId.includes("fable-5") ||
+        modelId.includes("mythos-5");
 
-      // Interleaved thinking (beta header) is only for Claude 4 models
-      // Opus 4.7 and 4.8 use adaptive thinking and don't require this header
+      // Interleaved thinking (beta header) is only for Claude 4 models.
+      // Adaptive-thinking-only models (Opus 4.7, 4.8, Fable 5, Mythos 5) do not
+      // need this header and rejecting requests when it is present has been
+      // observed in the past, so explicitly exclude them.
       const requiresInterleavedThinkingHeader =
         (modelId.includes("opus-4") &&
           !modelId.includes("opus-4-7") &&
@@ -156,21 +161,34 @@ export function getModelProfile(modelId: string): ModelProfile {
       // Claude models with extended thinking have issues with cachePoint after toolResult
       const supportsCachingWithToolResults = !supportsThinking;
 
-      // CLI-verified: output_config.effort is supported by Opus 4.6, 4.7, 4.8, Sonnet 4.6 ONLY.
-      // Opus 4.5, Sonnet 4.5, Haiku 4.5 reject effort.
+      // CLI-verified: output_config.effort is supported by Opus 4.6, 4.7, 4.8,
+      // Sonnet 4.6, Fable 5, and Mythos 5. Opus 4.5, Sonnet 4.5, Haiku 4.5 reject effort.
       const supportsThinkingEffort =
         modelId.includes("opus-4-6") ||
         modelId.includes("opus-4-7") ||
         modelId.includes("opus-4-8") ||
-        modelId.includes("sonnet-4-6");
+        modelId.includes("sonnet-4-6") ||
+        modelId.includes("fable-5") ||
+        modelId.includes("mythos-5");
 
-      // CLI-verified: Opus 4.7 and 4.8 reject thinking.type="enabled" and require "adaptive"
+      // CLI-verified: Opus 4.7 / 4.8 reject thinking.type="enabled" and require
+      // "adaptive". Per Anthropic docs, Fable 5 / Mythos 5 are adaptive-only too
+      // (`thinking: {type: "disabled"}` is rejected, no manual thinking).
       const requiresAdaptiveThinking =
-        modelId.includes("opus-4-7") || modelId.includes("opus-4-8");
+        modelId.includes("opus-4-7") ||
+        modelId.includes("opus-4-8") ||
+        modelId.includes("fable-5") ||
+        modelId.includes("mythos-5");
 
-      // CLI-verified: Opus 4.7 and 4.8 reject the temperature parameter
+      // CLI-verified for Opus 4.7 / 4.8; assumed for Fable 5 / Mythos 5 since
+      // they share the adaptive-thinking-only design with Opus 4.7/4.8 and
+      // every Anthropic model in that lineage to date has rejected temperature.
+      // If Anthropic's behaviour later differs, flip this back to false.
       const temperatureDeprecated =
-        modelId.includes("opus-4-7") || modelId.includes("opus-4-8");
+        modelId.includes("opus-4-7") ||
+        modelId.includes("opus-4-8") ||
+        modelId.includes("fable-5") ||
+        modelId.includes("mythos-5");
 
       return {
         requiresAdaptiveThinking,
@@ -293,6 +311,15 @@ function getClaudeTokenLimits(
   normalizedModelId: string,
   enable1MContext: boolean,
 ): ModelTokenLimits {
+  // Claude Fable 5 / Mythos 5: 1M context, 128K max output (per Anthropic docs).
+  // Same shape as Opus 4.7/4.8 -- 1M context is on by default, no beta header needed.
+  if (normalizedModelId.includes("fable-5") || normalizedModelId.includes("mythos-5")) {
+    return {
+      maxInputTokens: 1_000_000 - 128_000,
+      maxOutputTokens: 128_000,
+    };
+  }
+
   // Claude Opus 4.8: 1M context, 128K max output (matches Opus 4.7)
   if (normalizedModelId.includes("opus-4-8")) {
     return {
@@ -405,21 +432,25 @@ function normalizeModelId(modelId: string): string {
 
 /**
  * Check if a model supports 1M context window
- * Claude Opus 4.6, 4.7, 4.8, Sonnet 4.6, and Sonnet 4.x models support extended 1M context via anthropic_beta parameter
+ * Claude Opus 4.6, 4.7, 4.8, Sonnet 4.6, Fable 5, Mythos 5, and Sonnet 4.x models
+ * support extended 1M context. Opus 4.7/4.8/Fable 5/Mythos 5 always have 1M;
+ * Opus 4.6 and Sonnet 4.6 require the anthropic_beta header.
  */
 function supports1MContext(modelId: string): boolean {
-  // Per Anthropic docs: Opus 4.7/4.8 always 1M, Opus 4.6 and Sonnet 4.6 support 1M via beta header
   return (
     modelId.includes("opus-4-7") ||
     modelId.includes("opus-4-8") ||
     modelId.includes("opus-4-6") ||
-    modelId.includes("sonnet-4-6")
+    modelId.includes("sonnet-4-6") ||
+    modelId.includes("fable-5") ||
+    modelId.includes("mythos-5")
   );
 }
 
 /**
  * Resolve the user-requested effort level to one supported by the given model.
- * CLI-verified: xhigh is Opus 4.7/4.8 only; max is Opus 4.6/4.7/4.8 + Sonnet 4.6.
+ * CLI-verified: xhigh is Opus 4.7/4.8/Fable 5/Mythos 5 only;
+ *               max  is Opus 4.6/4.7/4.8 + Sonnet 4.6 + Fable 5 + Mythos 5.
  * Unsupported levels fall back to "high".
  */
 export function resolveEffortLevel(
@@ -430,7 +461,9 @@ export function resolveEffortLevel(
   if (
     requested === "xhigh" &&
     !normalized.includes("opus-4-7") &&
-    !normalized.includes("opus-4-8")
+    !normalized.includes("opus-4-8") &&
+    !normalized.includes("fable-5") &&
+    !normalized.includes("mythos-5")
   ) {
     return "high";
   }
@@ -439,7 +472,9 @@ export function resolveEffortLevel(
     !normalized.includes("opus-4-7") &&
     !normalized.includes("opus-4-8") &&
     !normalized.includes("opus-4-6") &&
-    !normalized.includes("sonnet-4-6")
+    !normalized.includes("sonnet-4-6") &&
+    !normalized.includes("fable-5") &&
+    !normalized.includes("mythos-5")
   ) {
     return "high";
   }

@@ -20,6 +20,7 @@ Bugfixes and additions over upstream `v0.11.0`. CLI-verified against the live Be
 
 **Newer Claude support**
 
+- Fable 5 (Mythos-class): adaptive-thinking-only, deprecated `temperature` handled, 1M / 128K limits, vision, tool use, full effort range (`low` -> `max`). Note: Bedrock requires the AWS account to opt in to data retention (`provider_data_share`) before invoking Fable 5; without that, Bedrock returns `ValidationException: data retention mode 'default' is not available for this model`.
 - Opus 4.8 / 4.7: adaptive thinking, deprecated `temperature` handled, correct 1M / 128K limits
 - Haiku 4.5: extended thinking enabled
 - All Claude 4.x: thinking mode (adaptive vs enabled+budget) and effort levels (low / medium / high / xhigh / max) gated per model

@@ -14,6 +14,16 @@ This changelog is split into two sections:
 
 ## Fork changelog (`rangan2510/aws-bedrock-for-copilot`)
 
+### [0.12.0-fork.10] - 2026-06-10
+
+#### Added
+
+- **Claude Fable 5 support** -- recognise the new Anthropic Mythos-class model `anthropic.claude-fable-5` (released 2026-06-09). Capabilities: 1M context window (always on), 128K max output, adaptive-thinking-only (`thinking: {type: "disabled"}` is rejected), vision, tool use, and the full effort range (`low`, `medium`, `high`, `xhigh`, `max`). Treated similarly to Opus 4.7/4.8 for `temperatureDeprecated` and `requiresInterleavedThinkingHeader: false`. Added to the `detectAnthropicFallbackModels` probe so accounts that block `ListFoundationModels` can still discover Fable 5; uses a Fable-specific regional-profile helper that only seeds `us.` and `eu.` prefixes since (as of launch) those are the only regional inference profiles Bedrock exposes for the model -- `global.anthropic.claude-fable-5` is the universal fallback. **Important**: Fable 5 is a "Covered Model" on Bedrock and requires the AWS account to opt in to `provider_data_share` via the [Bedrock Data Retention API](https://docs.aws.amazon.com/bedrock/latest/userguide/data-retention.html) before any Converse call succeeds; without that opt-in Bedrock returns `ValidationException: data retention mode 'default' is not available for this model`. The model is shown in the picker either way -- the user gets a clear error from Bedrock and can flip the account setting.
+
+#### Stubbed (not user-facing yet)
+
+- The same code paths also recognise `anthropic.claude-mythos-5` (Project Glasswing only). No fallback-probe entry is wired up because Mythos 5 is invitation-only and adding a non-existent model to the list would just produce noise on every fallback probe; users with Glasswing access can still select it manually if it appears in `ListFoundationModels`.
+
 ### [0.12.0-fork.9] - 2026-06-09
 
 #### Fixed
