@@ -137,7 +137,7 @@ export function getModelProfile(modelId: string): ModelProfile {
 
     case "anthropic": {
       // CLI-verified thinking support: Opus 4+, Sonnet 4+, Sonnet 3.7, Haiku 4.5,
-      // and the Mythos-class Fable/Mythos 5 models (adaptive-thinking-only).
+      // Sonnet 5, and the Mythos-class Fable/Mythos 5 models.
       const supportsThinking =
         modelId.includes("opus-4") ||
         modelId.includes("sonnet-4") ||
@@ -145,48 +145,52 @@ export function getModelProfile(modelId: string): ModelProfile {
         modelId.includes("sonnet-3.7") ||
         modelId.includes("haiku-4-5") ||
         modelId.includes("haiku-4.5") ||
+        modelId.includes("sonnet-5") ||
         modelId.includes("fable-5") ||
         modelId.includes("mythos-5");
 
       // Interleaved thinking (beta header) is only for Claude 4 models.
-      // Adaptive-thinking-only models (Opus 4.7, 4.8, Fable 5, Mythos 5) do not
-      // need this header and rejecting requests when it is present has been
-      // observed in the past, so explicitly exclude them.
+      // Adaptive-thinking-only models (Opus 4.7, 4.8, Sonnet 5, Fable 5, Mythos 5)
+      // do not need this header and rejecting requests when it is present has
+      // been observed in the past, so explicitly exclude them.
       const requiresInterleavedThinkingHeader =
         (modelId.includes("opus-4") &&
           !modelId.includes("opus-4-7") &&
           !modelId.includes("opus-4-8")) ||
-        modelId.includes("sonnet-4");
+        (modelId.includes("sonnet-4") && !modelId.includes("sonnet-5"));
 
       // Claude models with extended thinking have issues with cachePoint after toolResult
       const supportsCachingWithToolResults = !supportsThinking;
 
       // CLI-verified: output_config.effort is supported by Opus 4.6, 4.7, 4.8,
-      // Sonnet 4.6, Fable 5, and Mythos 5. Opus 4.5, Sonnet 4.5, Haiku 4.5 reject effort.
+      // Sonnet 4.6, Sonnet 5, Fable 5, and Mythos 5. Opus 4.5, Sonnet 4.5, Haiku 4.5 reject effort.
       const supportsThinkingEffort =
         modelId.includes("opus-4-6") ||
         modelId.includes("opus-4-7") ||
         modelId.includes("opus-4-8") ||
         modelId.includes("sonnet-4-6") ||
+        modelId.includes("sonnet-5") ||
         modelId.includes("fable-5") ||
         modelId.includes("mythos-5");
 
       // CLI-verified: Opus 4.7 / 4.8 reject thinking.type="enabled" and require
-      // "adaptive". Per Anthropic docs, Fable 5 / Mythos 5 are adaptive-only too
-      // (`thinking: {type: "disabled"}` is rejected, no manual thinking).
+      // "adaptive". Per Anthropic docs, Sonnet 5, Fable 5, and Mythos 5 are
+      // adaptive-only too (`thinking: {type: "disabled"}` is rejected).
       const requiresAdaptiveThinking =
         modelId.includes("opus-4-7") ||
         modelId.includes("opus-4-8") ||
+        modelId.includes("sonnet-5") ||
         modelId.includes("fable-5") ||
         modelId.includes("mythos-5");
 
-      // CLI-verified for Opus 4.7 / 4.8; assumed for Fable 5 / Mythos 5 since
-      // they share the adaptive-thinking-only design with Opus 4.7/4.8 and
-      // every Anthropic model in that lineage to date has rejected temperature.
-      // If Anthropic's behaviour later differs, flip this back to false.
+      // CLI-verified for Opus 4.7 / 4.8; assumed for Sonnet 5 / Fable 5 / Mythos 5
+      // since they share the adaptive-thinking-only design and every Anthropic
+      // model in that lineage to date has rejected temperature. If Anthropic's
+      // behaviour later differs, flip this back to false.
       const temperatureDeprecated =
         modelId.includes("opus-4-7") ||
         modelId.includes("opus-4-8") ||
+        modelId.includes("sonnet-5") ||
         modelId.includes("fable-5") ||
         modelId.includes("mythos-5");
 
@@ -287,21 +291,38 @@ export function getModelProfile(modelId: string): ModelProfile {
  * Returns model-specific token limits for known models, or conservative defaults for others
  * @param modelId The full Bedrock model ID (e.g., "anthropic.claude-3-5-sonnet-20241022-v2:0")
  * @param enable1MContext Whether to enable 1M context for supported models (default: false)
+ * @param safetyMargin Extra tokens to reserve on top of the output budget, subtracted
+ *   from maxInputTokens. Guards against char/4 undercounting and adaptive-thinking
+ *   spend pushing input+output past the hard context ceiling. Default 0 (no change).
  * @returns Token limits with maxInputTokens and maxOutputTokens
  */
-export function getModelTokenLimits(modelId: string, enable1MContext = false): ModelTokenLimits {
+export function getModelTokenLimits(
+  modelId: string,
+  enable1MContext = false,
+  safetyMargin = 0,
+): ModelTokenLimits {
   const normalizedModelId = normalizeModelId(modelId);
 
   // Claude models have specific token limits based on model family
-  if (normalizedModelId.startsWith("anthropic.claude")) {
-    return getClaudeTokenLimits(normalizedModelId, enable1MContext);
+  const limits = normalizedModelId.startsWith("anthropic.claude")
+    ? getClaudeTokenLimits(normalizedModelId, enable1MContext)
+    : // Default for unknown models
+      {
+        maxInputTokens: 196_000, // 200K context - 4K output
+        maxOutputTokens: 4096,
+      };
+
+  if (safetyMargin > 0) {
+    // Reserve additional headroom, but never shrink the input window below a
+    // usable floor (25% of the original or 8K, whichever is larger).
+    const floor = Math.max(8_000, Math.floor(limits.maxInputTokens * 0.25));
+    return {
+      ...limits,
+      maxInputTokens: Math.max(floor, limits.maxInputTokens - safetyMargin),
+    };
   }
 
-  // Default for unknown models
-  return {
-    maxInputTokens: 196_000, // 200K context - 4K output
-    maxOutputTokens: 4096,
-  };
+  return limits;
 }
 
 /**
@@ -311,6 +332,15 @@ function getClaudeTokenLimits(
   normalizedModelId: string,
   enable1MContext: boolean,
 ): ModelTokenLimits {
+  // Claude Sonnet 5 (Fennec): 1M context, 128K max output (per Anthropic docs).
+  // Adaptive-thinking-only, 1M always on.
+  if (normalizedModelId.includes("sonnet-5")) {
+    return {
+      maxInputTokens: 1_000_000 - 128_000,
+      maxOutputTokens: 128_000,
+    };
+  }
+
   // Claude Fable 5 / Mythos 5: 1M context, 128K max output (per Anthropic docs).
   // Same shape as Opus 4.7/4.8 -- 1M context is on by default, no beta header needed.
   if (normalizedModelId.includes("fable-5") || normalizedModelId.includes("mythos-5")) {
@@ -442,6 +472,7 @@ function supports1MContext(modelId: string): boolean {
     modelId.includes("opus-4-8") ||
     modelId.includes("opus-4-6") ||
     modelId.includes("sonnet-4-6") ||
+    modelId.includes("sonnet-5") ||
     modelId.includes("fable-5") ||
     modelId.includes("mythos-5")
   );
@@ -449,8 +480,8 @@ function supports1MContext(modelId: string): boolean {
 
 /**
  * Resolve the user-requested effort level to one supported by the given model.
- * CLI-verified: xhigh is Opus 4.7/4.8/Fable 5/Mythos 5 only;
- *               max  is Opus 4.6/4.7/4.8 + Sonnet 4.6 + Fable 5 + Mythos 5.
+ * CLI-verified: xhigh is Opus 4.7/4.8/Sonnet 5/Fable 5/Mythos 5 only;
+ *               max  is Opus 4.6/4.7/4.8 + Sonnet 4.6 + Sonnet 5 + Fable 5 + Mythos 5.
  * Unsupported levels fall back to "high".
  */
 export function resolveEffortLevel(
@@ -462,6 +493,7 @@ export function resolveEffortLevel(
     requested === "xhigh" &&
     !normalized.includes("opus-4-7") &&
     !normalized.includes("opus-4-8") &&
+    !normalized.includes("sonnet-5") &&
     !normalized.includes("fable-5") &&
     !normalized.includes("mythos-5")
   ) {
@@ -473,6 +505,7 @@ export function resolveEffortLevel(
     !normalized.includes("opus-4-8") &&
     !normalized.includes("opus-4-6") &&
     !normalized.includes("sonnet-4-6") &&
+    !normalized.includes("sonnet-5") &&
     !normalized.includes("fable-5") &&
     !normalized.includes("mythos-5")
   ) {

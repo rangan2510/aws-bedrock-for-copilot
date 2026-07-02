@@ -20,6 +20,7 @@ Bugfixes and additions over upstream `v0.11.0`. CLI-verified against the live Be
 
 **Newer Claude support**
 
+- Sonnet 5 (Fennec): adaptive-thinking, deprecated `temperature` handled, 1M / 128K limits, vision, tool use, full effort range (`low` -> `max`, including `xhigh`).
 - Fable 5 (Mythos-class): adaptive-thinking-only, deprecated `temperature` handled, 1M / 128K limits, vision, tool use, full effort range (`low` -> `max`). Note: Bedrock requires the AWS account to opt in to data retention (`provider_data_share`) before invoking Fable 5; without that, Bedrock returns `ValidationException: data retention mode 'default' is not available for this model`.
 - Opus 4.8 / 4.7: adaptive thinking, deprecated `temperature` handled, correct 1M / 128K limits
 - Haiku 4.5: extended thinking enabled
@@ -34,7 +35,8 @@ Bugfixes and additions over upstream `v0.11.0`. CLI-verified against the live Be
 **UX**
 
 - Model picker shows capability summary inline (context, output, thinking mode, vision)
-- LEGACY models prefixed with a warning glyph instead of being silently filtered
+- Deprecated (LEGACY) models are hidden by default; re-enable with `showDeprecatedModels`
+- Context safety margin reserves response headroom on 1M-context models to avoid context-overflow errors (`contextSafetyMargin`, default 32K)
 - Region setting is now a dropdown of known Bedrock regions
 
 **Identity**
@@ -112,10 +114,12 @@ All settings live under the `aws-bedrock-for-copilot` namespace. Vendor-specific
 | `preferredModel` | _(unset)_ | Model ID Copilot should default to |
 | `promptCaching.enabled` | `true` | Cache system prompts and tool definitions for Claude and Nova |
 | `reasoningEffort` | `high` | `reasoning_effort` for non-Anthropic reasoning models (minimal/low/medium/high) |
+| `contextSafetyMargin` | `32000` | Tokens reserved on top of the output budget (0-200000). Prevents context-overflow on 1M models; increase if overflow persists, decrease to use more of the window |
+| `showDeprecatedModels` | `false` | Show AWS LEGACY-lifecycle models in the picker |
 | `anthropic.thinking.enabled` | `true` | Enable extended thinking for thinking-capable Claude models |
 | `anthropic.thinking.budgetTokens` | `10000` | Token budget for `thinking.type=enabled` models (Opus 4.5/4.1/4, Sonnet 4.5/4/3.7, Haiku 4.5) |
-| `anthropic.thinking.effort` | `high` | Adaptive-thinking effort for Opus 4.6/4.7/4.8 and Sonnet 4.6 (low/medium/high/xhigh/max) |
-| `anthropic.context1M.enabled` | `true` | Enable 1M context for Opus 4.6 and Sonnet 4.6 (Opus 4.7/4.8 always use 1M) |
+| `anthropic.thinking.effort` | `high` | Adaptive-thinking effort for Opus 4.6/4.7/4.8, Sonnet 4.6, and Sonnet 5 (low/medium/high/xhigh/max) |
+| `anthropic.context1M.enabled` | `true` | Enable 1M context for Opus 4.6 and Sonnet 4.6 (Opus 4.7/4.8, Sonnet 5, Fable 5 always use 1M) |
 | `anthropic.inferenceProfiles.preferRegional` | `false` | Use regional (`us.*`/`eu.*`) profiles instead of `global.*` |
 
 Legacy unprefixed keys (`thinking.*`, `context1M.*`, `inferenceProfiles.preferRegional`) are still read for backward compatibility but new installs should use the namespaced keys.

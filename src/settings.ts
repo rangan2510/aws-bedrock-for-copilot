@@ -15,6 +15,14 @@ export interface BedrockSettings {
   context1M: {
     enabled: boolean;
   };
+  /**
+   * Extra token headroom subtracted from a model's advertised input window so
+   * that input + output + this margin stays clear of the hard context ceiling.
+   * Guards against char/4 token-count undercounting and adaptive-thinking token
+   * spend that would otherwise trigger Bedrock context-overflow ValidationExceptions,
+   * especially on 1M-context models. See getModelTokenLimits.
+   */
+  contextSafetyMargin: number;
   inferenceProfiles: {
     preferRegional: boolean;
   };
@@ -29,6 +37,11 @@ export interface BedrockSettings {
    */
   reasoningEffort: ReasoningEffort;
   region: string;
+  /**
+   * When false (default), models whose Bedrock lifecycle status is LEGACY are
+   * hidden from the model picker. Set true to surface deprecated models.
+   */
+  showDeprecatedModels: boolean;
   thinking: {
     budgetTokens: number;
     effort: ThinkingEffort;
@@ -148,10 +161,22 @@ export async function getBedrockSettings(globalState: vscode.Memento): Promise<B
       ? (rawReasoning as ReasoningEffort)
       : "high";
 
+  // Context safety margin (tokens reserved on top of the output budget).
+  // Clamped to a sane range so a bad value can't make maxInputTokens negative.
+  const rawSafetyMargin = config.get<number>("contextSafetyMargin");
+  const contextSafetyMargin =
+    typeof rawSafetyMargin === "number" && Number.isFinite(rawSafetyMargin)
+      ? Math.min(200_000, Math.max(0, Math.floor(rawSafetyMargin)))
+      : 32_000;
+
+  // Hide LEGACY (deprecated) models by default.
+  const showDeprecatedModels = config.get<boolean>("showDeprecatedModels") ?? false;
+
   return {
     context1M: {
       enabled: context1MEnabled,
     },
+    contextSafetyMargin,
     inferenceProfiles: {
       preferRegional: preferRegionalInferenceProfiles,
     },
@@ -162,6 +187,7 @@ export async function getBedrockSettings(globalState: vscode.Memento): Promise<B
     },
     reasoningEffort,
     region,
+    showDeprecatedModels,
     thinking: {
       budgetTokens: Math.max(1024, thinkingBudgetTokens),
       effort: thinkingEffort,

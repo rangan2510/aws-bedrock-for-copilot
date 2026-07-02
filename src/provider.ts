@@ -165,7 +165,7 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
           progress?.report({ message: "Fetching model list..." });
 
           const [models, apiProfileIds] = await Promise.all([
-            this.client.fetchModels(abortController.signal),
+            this.client.fetchModels(abortController.signal, settings.showDeprecatedModels),
             this.client.fetchInferenceProfiles(abortController.signal),
           ]);
 
@@ -229,7 +229,11 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
               continue;
             }
 
-            const limits = getModelTokenLimits(modelIdToUse, settings.context1M.enabled);
+            const limits = getModelTokenLimits(
+              modelIdToUse,
+              settings.context1M.enabled,
+              settings.contextSafetyMargin,
+            );
             const maxInput = limits.maxInputTokens;
             const maxOutput = limits.maxOutputTokens;
             const vision = m.inputModalities.includes(ModelModality.IMAGE);
@@ -287,7 +291,11 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
 
             // Use base model ID for token limits (falls back to profile ID if not available)
             const modelIdForLimits = profile.baseModelId ?? profile.modelId;
-            const limits = getModelTokenLimits(modelIdForLimits, settings.context1M.enabled);
+            const limits = getModelTokenLimits(
+              modelIdForLimits,
+              settings.context1M.enabled,
+              settings.contextSafetyMargin,
+            );
             const maxInput = limits.maxInputTokens;
             const maxOutput = limits.maxOutputTokens;
             const vision = profile.inputModalities.includes(ModelModality.IMAGE);
@@ -889,7 +897,11 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
         });
       }
 
-      const limits = getModelTokenLimits(baseModelId, settings.context1M.enabled);
+      const limits = getModelTokenLimits(
+        baseModelId,
+        settings.context1M.enabled,
+        settings.contextSafetyMargin,
+      );
       const likelyVisionCapable =
         /anthropic\.|nova\.|llama\.|pixtral|mistral-large-3|magistral|gemma|kimi-k2\.5|nemotron.*v2|qwen3-vl|palmyra-vision/i.test(
           baseModelId,

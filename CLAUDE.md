@@ -129,9 +129,11 @@ src/
 
 ## VSCode API Requirements
 
-- Minimum VSCode version: 1.104.0
-- Uses proposed/experimental APIs (downloaded via `bun run download-api`)
-- API definitions in vscode.d.ts (auto-generated)
+- `engines.vscode`: `^1.116.0`. `LanguageModelChatProvider` is a **proposed (unstable) API** — Microsoft can change its shape in any VS Code release with no deprecation cycle. Every VS Code update is a potential breakage point (this fork's changelog is largely such fixes: `agentMode`/`isUserSelectable` in 1.116, body-timeout, empty-response, etc.). An `engines.vscode` upper bound would be ideal but `vsce` rejects compound ranges, so the activation guard below is the safety net.
+- **After each VS Code update: rebuild + reinstall the VSIX and retest.** There is no auto-update (sideloaded, not on Marketplace — the Marketplace rejects proposed-API extensions). Bump the `engines.vscode` upper bound only after retesting on the new version.
+- `extension.ts` has an activation-time guard that fails loudly if `vscode.lm.registerLanguageModelChatProvider` is missing.
+- Uses proposed/experimental APIs; `src/vscode.d.ts` is downloaded via `bun run download-api` but the `agentMode`/`isUserSelectable` picker fields are hand-patched (via the `PickerLanguageModelChatInformation` intersection type in `provider.ts`).
+- VS Code 1.120+ enforces the reported `maxInputTokens`/`maxOutputTokens` when packing conversations for BYOK/provider models — so accurate token limits and the `contextSafetyMargin` reservation matter for avoiding context-overflow.
 
 ## Development Workflow
 

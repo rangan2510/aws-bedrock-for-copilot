@@ -243,7 +243,10 @@ export class BedrockAPIClient {
     }
   }
 
-  async fetchModels(abortSignal?: AbortSignal): Promise<BedrockModelSummary[]> {
+  async fetchModels(
+    abortSignal?: AbortSignal,
+    showDeprecated = false,
+  ): Promise<BedrockModelSummary[]> {
     try {
       // Clear any fallback state before fetching
       this.fallbackInferenceProfileIds.clear();
@@ -254,10 +257,8 @@ export class BedrockAPIClient {
       });
       const response = await this.bedrockClient.send(command, { abortSignal });
 
-      // Include both ACTIVE and LEGACY models. LEGACY models are still
-      // invokable in many regions (especially ap-south-1, ap-southeast-1)
-      // and the UI surfaces a warning prefix so users can distinguish.
-      const allModels = (response.modelSummaries ?? []).map((summary) => ({
+      // Map all returned summaries first.
+      const mappedModels = (response.modelSummaries ?? []).map((summary) => ({
         customizationsSupported: summary.customizationsSupported,
         inferenceTypesSupported: summary.inferenceTypesSupported,
         inputModalities: summary.inputModalities ?? [],
@@ -270,8 +271,21 @@ export class BedrockAPIClient {
         responseStreamingSupported: summary.responseStreamingSupported ?? false,
       }));
 
-      const legacyCount = allModels.filter((m) => m.modelLifecycle?.status === "LEGACY").length;
-      logger.debug(`[Bedrock API Client] Found ${allModels.length} models (${legacyCount} legacy)`);
+      const legacyCount = mappedModels.filter((m) => m.modelLifecycle?.status === "LEGACY").length;
+
+      // Hide deprecated (LEGACY) models by default. AWS marks superseded models
+      // LEGACY ahead of removal; surfacing them clutters the picker and lets
+      // users pick a model that may stop working. Users can opt back in via the
+      // `aws-bedrock-for-copilot.showDeprecatedModels` setting.
+      const allModels = showDeprecated
+        ? mappedModels
+        : mappedModels.filter((m) => m.modelLifecycle?.status !== "LEGACY");
+
+      logger.debug(
+        `[Bedrock API Client] Found ${mappedModels.length} models (${legacyCount} legacy${
+          showDeprecated ? ", shown" : ", hidden"
+        }); returning ${allModels.length}`,
+      );
 
       return allModels;
     } catch (error) {
@@ -526,6 +540,19 @@ export class BedrockAPIClient {
           this.region,
           regionPrefix,
           "anthropic.claude-fable-5",
+        ),
+      },
+      {
+        // Claude Sonnet 5 (Fennec, claude-sonnet-5-20260203): 1M context, 128K
+        // output, adaptive thinking, vision, tool use. INFERENCE_PROFILE-only.
+        // Only `us.` regional profile at launch (+ global.).
+        baseModelId: "anthropic.claude-sonnet-5",
+        displayName: "Claude Sonnet 5",
+        globalProfileId: hasGlobalProfiles ? "global.anthropic.claude-sonnet-5" : null,
+        regionalProfileIds: getSonnet5RegionalProfileIds(
+          this.region,
+          regionPrefix,
+          "anthropic.claude-sonnet-5",
         ),
       },
       {
@@ -924,6 +951,20 @@ function getFable5GeoPrefix(region: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Geo prefix for Sonnet 5. As of 2026-07-02 Sonnet 5 only has a `us.` regional
+ * inference profile (us-east-1, us-west-2, ca-central-1) plus the universal
+ * `global.` profile -- no `eu.`, `jp.`, or `au.` regional profiles yet. So we
+ * only seed `us.` in the US/Canada partition and rely on `global.` elsewhere.
+ */
+function getSonnet5GeoPrefix(region: string): string | undefined {
+  if ((region.startsWith("us-") && !region.startsWith("us-gov-")) || region.startsWith("ca-")) {
+    return "us";
+  }
+
+  return undefined;
+}
+
 function getClaude47RegionalProfileIds(
   region: string,
   defaultRegionPrefix: string,
@@ -955,6 +996,28 @@ function getFable5RegionalProfileIds(
 ): string[] {
   const prefixes = new Set<string>();
   const geoPrefix = getFable5GeoPrefix(region);
+
+  if (geoPrefix) {
+    prefixes.add(geoPrefix);
+  }
+  prefixes.add(defaultRegionPrefix);
+
+  return [...prefixes].map((prefix) => `${prefix}.${baseModelId}`);
+}
+
+/**
+ * Build the candidate regional profile IDs for Sonnet 5.
+ * Sonnet 5 only exposes a `us.` regional profile at launch (plus `global.`),
+ * so we seed only `us.` in the US/Canada partition. The default region prefix
+ * is still added so a future regional rollout is detected automatically.
+ */
+function getSonnet5RegionalProfileIds(
+  region: string,
+  defaultRegionPrefix: string,
+  baseModelId: string,
+): string[] {
+  const prefixes = new Set<string>();
+  const geoPrefix = getSonnet5GeoPrefix(region);
 
   if (geoPrefix) {
     prefixes.add(geoPrefix);

@@ -2,13 +2,13 @@
   "name": "aws-bedrock-for-copilot",
   "publisher": "rangan2510",
   "displayName": "AWS Bedrock for Copilot",
-  "description": "Amazon Bedrock integration using VSCode's official Language Model Chat Provider API. Connects AWS Bedrock models such as Claude (including Fable 5 and Opus 4.8), OpenAI OSS, DeepSeek to GitHub Copilot Chat via AWS SDK. Supports streaming, tool calling, and vision.",
+  "description": "Amazon Bedrock integration using VSCode's official Language Model Chat Provider API. Connects AWS Bedrock models such as Claude (including Sonnet 5, Fable 5, Opus 4.8), OpenAI OSS, DeepSeek to GitHub Copilot Chat via AWS SDK. Supports streaming, tool calling, and vision.",
   "icon": "assets/logo.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/rangan2510/aws-bedrock-for-copilot"
   },
-  "version": "0.12.0-fork.10",
+  "version": "0.13.0-fork.1",
   "engines": {
     "vscode": "^1.116.0"
   },
@@ -200,6 +200,20 @@
           "type": "boolean",
           "default": true,
           "description": "Enable prompt caching for supported models (Claude and Nova) to reduce latency and costs. Caches system prompts, tool definitions, and recent tool results. Disable if you need fully fresh responses or want to avoid cache-related costs.",
+          "scope": "resource"
+        },
+        "aws-bedrock-for-copilot.contextSafetyMargin": {
+          "type": "number",
+          "default": 32000,
+          "minimum": 0,
+          "maximum": 200000,
+          "description": "Tokens reserved on top of a model's output budget, subtracted from its advertised input window. Guards against context-overflow errors on large-context (1M) models: the extension's token counting is an estimate and adaptive-thinking tokens also consume the window, so leaving headroom prevents input + output from hitting the hard ceiling. Increase if you still see context-overflow errors on very long conversations; decrease to use more of the window. Clamped to 0-200000.",
+          "scope": "resource"
+        },
+        "aws-bedrock-for-copilot.showDeprecatedModels": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show models that AWS has marked as deprecated (LEGACY lifecycle status) in the model picker. Off by default so the picker only lists ACTIVE models. Enable if you need to keep using a superseded model that is still invokable in your region.",
           "scope": "resource"
         }
       }

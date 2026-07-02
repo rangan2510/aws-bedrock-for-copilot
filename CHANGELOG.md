@@ -14,6 +14,21 @@ This changelog is split into two sections:
 
 ## Fork changelog (`rangan2510/aws-bedrock-for-copilot`)
 
+### [0.13.0-fork.1] - 2026-07-02
+
+#### Added
+
+- **Claude Sonnet 5 support** (`anthropic.claude-sonnet-5`, codename Fennec, `claude-sonnet-5-20260203`). CLI-verified live on Bedrock: ACTIVE, INFERENCE_PROFILE-only, TEXT+IMAGE input, TEXT output, 1M context window, 128K max output. Adaptive-thinking family (matches Opus 4.7/4.8/Sonnet 4.6). Effort levels: `low`, `medium`, `high` (default), `xhigh`, and `max` (Sonnet 5 supports both `xhigh` and `max`, unlike Sonnet 4.6 which only supports `max`). Added to the `detectAnthropicFallbackModels` probe with a Sonnet-5-specific regional helper that only seeds the `us.` prefix (us-east-1/us-west-2/ca-central-1) since that is the only regional inference profile at launch; `global.anthropic.claude-sonnet-5` is the universal fallback.
+
+#### Changed
+
+- **Context safety margin to prevent 1M-context overflow errors.** New setting `aws-bedrock-for-copilot.contextSafetyMargin` (default `32000`, range 0-200000) reserves extra token headroom on top of a model's output budget, subtracted from its advertised input window. This guards against `ValidationException` context-overflow errors on 1M-context models: the extension's token counting is a `char/4` estimate that can undercount real tokens, and adaptive-thinking tokens also consume the window, so input + output could previously hit the hard 1M ceiling with zero margin. This matters more since VS Code 1.120, which began enforcing the reported `maxInputTokens`/`maxOutputTokens` for BYOK/provider models when packing conversations. Increase the margin if overflow errors persist on very long conversations; decrease to use more of the window.
+- **Deprecated (LEGACY) models are now hidden by default.** Previously the fork surfaced LEGACY-lifecycle models with a warning glyph; they are now filtered out of the model picker. New setting `aws-bedrock-for-copilot.showDeprecatedModels` (default `false`) restores the old behaviour for anyone who still needs a superseded-but-invokable model.
+
+#### VS Code compatibility
+
+- **Activation-time proposed-API guard.** `LanguageModelChatProvider` is still a proposed (unstable) VS Code API; a future VS Code release can change its shape without a deprecation cycle. If `vscode.lm.registerLanguageModelChatProvider` is missing at activation (e.g. a future VS Code removed/renamed the proposed API), the extension now logs a clear error and shows a notification naming the VS Code version, instead of failing cryptically deep in activation. (An `engines.vscode` upper bound was evaluated but `vsce` rejects compound version ranges, so the activation guard is the mechanism.)
+
 ### [0.12.0-fork.10] - 2026-06-10
 
 #### Added
