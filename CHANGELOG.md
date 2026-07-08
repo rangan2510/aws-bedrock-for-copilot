@@ -14,6 +14,12 @@ This changelog is split into two sections:
 
 ## Fork changelog (`rangan2510/aws-bedrock-for-copilot`)
 
+### [0.13.0-fork.2] - 2026-07-08
+
+#### Added
+
+- **Utility model commands for VS Code 1.128+ BYOK utility routing.** VS Code 1.128 stopped falling back to GitHub Copilot's models for background utility flows (chat titles, intent detection, commit messages, rename suggestions) when the selected main model is BYOK, surfacing `No utility model is configured for 'copilot-utility-small'`. The **Manage AWS Bedrock for Copilot** command now offers two actions: **Set BYOK Utility Default** (writes VS Code's `chat.byokUtilityModelDefault` -- `mainAgent` / `copilot` / `none`) and **Set Utility Model** (pick a Bedrock model from the live model list; writes the global `chat.utilityModel` / `chat.utilitySmallModel` and sets `byokUtilityModelDefault` to `none`). Prefer `mainAgent` to keep utility flows scoped to the active provider, since `chat.utilityModel`/`chat.utilitySmallModel` are single global values shared across providers.
+
 ### [0.13.0-fork.1] - 2026-07-02
 
 #### Added

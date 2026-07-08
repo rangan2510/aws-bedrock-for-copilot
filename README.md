@@ -37,6 +37,7 @@ Bugfixes and additions over upstream `v0.11.0`. CLI-verified against the live Be
 - Model picker shows capability summary inline (context, output, thinking mode, vision)
 - Deprecated (LEGACY) models are hidden by default; re-enable with `showDeprecatedModels`
 - Context safety margin reserves response headroom on 1M-context models to avoid context-overflow errors (`contextSafetyMargin`, default 32K)
+- Utility model commands: pick a Bedrock model for VS Code's background utility flows, or route them to your main model (VS Code 1.128+ BYOK utility setting)
 - Region setting is now a dropdown of known Bedrock regions
 
 **Identity**
@@ -123,6 +124,20 @@ All settings live under the `aws-bedrock-for-copilot` namespace. Vendor-specific
 | `anthropic.inferenceProfiles.preferRegional` | `false` | Use regional (`us.*`/`eu.*`) profiles instead of `global.*` |
 
 Legacy unprefixed keys (`thinking.*`, `context1M.*`, `inferenceProfiles.preferRegional`) are still read for backward compatibility but new installs should use the namespaced keys.
+
+### Utility models (VS Code 1.128+)
+
+Since VS Code 1.128, background "utility" flows (chat title generation, intent detection, commit messages, rename suggestions) do not fall back to GitHub Copilot's models when your main chat model is a BYOK/provider model. If no utility model is configured you may see `No utility model is configured for 'copilot-utility-small'`.
+
+The **Manage AWS Bedrock for Copilot** command exposes two actions for this:
+
+- **Set BYOK Utility Default** -- writes VS Code's `chat.byokUtilityModelDefault`:
+  - `mainAgent` (recommended) -- utility flows reuse whatever main model you have selected, so they stay scoped to the active provider automatically.
+  - `copilot` -- use GitHub Copilot's utility models (requires Copilot access).
+  - `none` -- require an explicit override (below).
+- **Set Utility Model** -- pick a specific Bedrock model from the live model list. This writes VS Code's global `chat.utilityModel` / `chat.utilitySmallModel` and sets `byokUtilityModelDefault` to `none` so the explicit choice wins.
+
+Note: `chat.utilityModel` / `chat.utilitySmallModel` are global, single-valued VS Code settings shared across all providers. To keep the utility model scoped to whichever provider is active, prefer **Set BYOK Utility Default -> Use Main Agent Model**.
 
 ## Usage
 

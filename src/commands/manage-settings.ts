@@ -9,6 +9,9 @@ import { logger } from "../logger";
 import { getBedrockSettings, updateBedrockSettings } from "../settings";
 import type { AuthMethod } from "../types";
 
+/** VS Code language model vendor id for this extension's provider. */
+const BEDROCK_VENDOR = "aws-bedrock-for-copilot";
+
 const AWS_REGIONS = new Set<string>();
 
 export async function getBedrockRegionsFromSSM(
@@ -59,6 +62,8 @@ export async function manageSettings(
 ): Promise<void> {
   const settings = await getBedrockSettings(globalState);
   const currentAuthMethod = globalState.get<AuthMethod>("bedrock.authMethod") ?? "profile";
+  const chatConfig = vscode.workspace.getConfiguration("chat");
+  const currentByokUtilityDefault = chatConfig.get<string>("byokUtilityModelDefault") ?? "none";
 
   const action = await vscode.window.showQuickPick(
     [
@@ -80,6 +85,16 @@ export async function manageSettings(
         label: "Set Region",
         value: "region" as const,
       },
+      {
+        description: `Current: ${chatConfig.get<string>("utilitySmallModel") ?? "Default"}`,
+        label: "Set Utility Model",
+        value: "utility-model" as const,
+      },
+      {
+        description: `Current: ${currentByokUtilityDefault}`,
+        label: "Set BYOK Utility Default",
+        value: "byok-utility-default" as const,
+      },
       { label: "Clear Settings", value: "clear" as const },
     ],
     {
@@ -95,6 +110,10 @@ export async function manageSettings(
       await handleAuthMethodSelection(secrets, globalState);
       break;
     }
+    case "byok-utility-default": {
+      await handleByokUtilityDefaultSelection();
+      break;
+    }
     case "clear": {
       await handleClearSettings(secrets, globalState);
       break;
@@ -105,6 +124,10 @@ export async function manageSettings(
     }
     case "region": {
       await handleRegionSelection(settings.region, globalState, secrets);
+      break;
+    }
+    case "utility-model": {
+      await handleUtilityModelSelection();
       break;
     }
   }
@@ -191,6 +214,10 @@ async function clearAuthSettings(
     secrets.delete("bedrock.sessionToken"),
     globalState.update("bedrock.profile", undefined),
   ]);
+}
+
+function formatUtilityModelSelector(name: string, vendor: string): string {
+  return `${name} (${vendor})`;
 }
 
 async function handleAccessKeysSetup(secrets: vscode.SecretStorage): Promise<void> {
@@ -313,6 +340,52 @@ async function handleAuthMethodSelection(
   }
 }
 
+async function handleByokUtilityDefaultSelection(): Promise<void> {
+  const config = vscode.workspace.getConfiguration("chat");
+  const currentValue = config.get<string>("byokUtilityModelDefault") ?? "none";
+
+  const selected = await vscode.window.showQuickPick(
+    [
+      {
+        description: "Recommended when switching between BYOK providers. Reuses the currently selected main chat model.",
+        label: "Use Main Agent Model",
+        value: "mainAgent",
+      },
+      {
+        description: "Use GitHub Copilot utility models for background utility flows.",
+        label: "Use Copilot Utility Models",
+        value: "copilot",
+      },
+      {
+        description: "Require an explicit chat.utilityModel/chat.utilitySmallModel override.",
+        label: "No Default Utility Model",
+        value: "none",
+      },
+    ],
+    {
+      ignoreFocusOut: true,
+      placeHolder: `Current: ${currentValue}`,
+      title: "Select BYOK Utility Default",
+    },
+  );
+
+  if (!selected) return;
+
+  const scope = await askConfigurationScope();
+  if (scope === undefined) return;
+
+  await config.update("byokUtilityModelDefault", selected.value, scope);
+  if (selected.value === "mainAgent" || selected.value === "copilot") {
+    await config.update("utilityModel", undefined, scope);
+    await config.update("utilitySmallModel", undefined, scope);
+  }
+
+  const scopeLabel = scope === vscode.ConfigurationTarget.Workspace ? "workspace" : "user";
+  vscode.window.showInformationMessage(
+    `BYOK utility default set to ${selected.value} (${scopeLabel} settings).`,
+  );
+}
+
 async function handleClearSettings(
   secrets: vscode.SecretStorage,
   globalState: vscode.Memento,
@@ -410,6 +483,54 @@ async function handleRegionSelection(
   } finally {
     cancellationToken.dispose();
   }
+}
+
+/**
+ * Let the user pick a specific model to back VS Code's utility flows
+ * (chat.utilityModel / chat.utilitySmallModel). Selecting an explicit model
+ * also sets chat.byokUtilityModelDefault to "none" so the explicit choice wins.
+ */
+async function handleUtilityModelSelection(): Promise<void> {
+  const chatConfig = vscode.workspace.getConfiguration("chat");
+  const currentSelector = chatConfig.get<string>("utilitySmallModel") ?? "Default";
+
+  const models = await vscode.lm.selectChatModels({ vendor: BEDROCK_VENDOR });
+  const availableModels = models.toSorted((a, b) => a.name.localeCompare(b.name));
+
+  if (availableModels.length === 0) {
+    vscode.window.showWarningMessage(
+      "No available Bedrock models found for this provider. Configure authentication and region, then retry.",
+    );
+    return;
+  }
+
+  const selected = await vscode.window.showQuickPick(
+    availableModels.map((model) => ({
+      description: model.id,
+      label: model.name,
+      selectorLabel: formatUtilityModelSelector(model.name, BEDROCK_VENDOR),
+      value: model.id,
+    })),
+    {
+      ignoreFocusOut: true,
+      placeHolder: `Current: ${currentSelector}`,
+      title: "Select Utility Model",
+    },
+  );
+
+  if (!selected) return;
+
+  const scope = await askConfigurationScope();
+  if (scope === undefined) return;
+
+  await chatConfig.update("byokUtilityModelDefault", "none", scope);
+  await chatConfig.update("utilityModel", selected.selectorLabel, scope);
+  await chatConfig.update("utilitySmallModel", selected.selectorLabel, scope);
+
+  const scopeLabel = scope === vscode.ConfigurationTarget.Workspace ? "workspace" : "user";
+  vscode.window.showInformationMessage(
+    `Utility model set to ${selected.value} (${scopeLabel} settings).`,
+  );
 }
 
 async function promptForManualRegion(

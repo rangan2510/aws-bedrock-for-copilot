@@ -8,6 +8,7 @@ eslint.config.mjs
 tsconfig.json
 node_modules/**
 *.vsix
+dist/_*/**
 .claude
 CLAUDE.md
 *.log
