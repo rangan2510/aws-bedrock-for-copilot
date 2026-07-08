@@ -194,7 +194,18 @@ export class StreamProcessor {
       // handlers matched, emit a generic fallback rather than letting
       // validateContentEmission throw a hard error that VS Code shows as
       // "Sorry, no response was returned".
-      if (!state.hasEmittedContent && !state.hasEmittedThinking && !token.isCancellationRequested) {
+      //
+      // Excludes the "validator-owned" stop reasons (content_filtered,
+      // guardrail_intervened, model_context_window_exceeded): those are handled
+      // by validateStreamResult below, which emits its own specific fallback.
+      // Emitting the generic message here too would produce a contradictory
+      // double message (generic "no response" bubble + the specific reason).
+      if (
+        !state.hasEmittedContent &&
+        !state.hasEmittedThinking &&
+        !token.isCancellationRequested &&
+        !isValidatorOwnedStopReason(state.stopReason)
+      ) {
         const isEmptyStream = state.eventCount === 0;
         logger.warn(
           isEmptyStream
@@ -220,7 +231,7 @@ export class StreamProcessor {
       }
 
       this.logCompletion(state);
-      this.validateStreamResult(state, token);
+      this.validateStreamResult(state, progress, token);
 
       return { thinkingBlock: state.capturedThinkingBlock };
     } catch (error) {
@@ -584,42 +595,77 @@ export class StreamProcessor {
     }
   }
 
-  private validateContentFiltering(state: ProcessingState): void {
+  private validateContentFiltering(
+    state: ProcessingState,
+    progress: Progress<LanguageModelResponsePart2>,
+  ): void {
     if (state.stopReason !== StopReason.CONTENT_FILTERED) {
       return;
     }
 
+    // Content filtering is a legitimate model/platform response, not a broken
+    // stream. Emit a visible fallback so VS Code shows one clear message and
+    // the turn completes cleanly, instead of throwing a hard error that surfaces
+    // as "Sorry, your request failed" on top of any catch-all message.
+    // Note: Mythos-class models (Fable 5) have a notably stricter built-in input
+    // classifier and can return content_filtered with zero input tokens even for
+    // benign prompts; when that happens, a different model is the practical fix.
+    logger.warn("[Stream Processor] Response filtered by content safety policies", {
+      hadVisibleOutput: this.hasVisibleOutput(state),
+      stopReason: state.stopReason,
+    });
     const message = this.hasVisibleOutput(state)
-      ? "The response was filtered mid-generation by content safety policies. Some content may have been displayed before filtering. This may be due to Anthropic Claude's built-in safety filtering (common with Claude 4.5) or AWS Bedrock Guardrails. Please rephrase your request."
-      : "The response was filtered by content safety policies before any content was generated. This may be due to Anthropic Claude's built-in safety filtering or AWS Bedrock Guardrails. Please rephrase your request.";
-    throw new Error(message);
+      ? "*(The response was filtered mid-generation by content safety policies. Some content may have been shown before filtering. This can be Anthropic Claude's built-in safety filter (stricter on Fable 5 / Claude 4.5) or AWS Bedrock Guardrails. Try rephrasing, or use a different model.)*"
+      : "*(The request was blocked by content safety policies before any response was generated. This can be Anthropic Claude's built-in safety filter (stricter on Fable 5 / Claude 4.5) or AWS Bedrock Guardrails. Try rephrasing, or use a different model.)*";
+    progress.report(new vscode.LanguageModelTextPart(wrapFallback(message)));
+    state.hasEmittedContent = true;
   }
 
-  private validateContextWindow(state: ProcessingState): void {
+  private validateContextWindow(
+    state: ProcessingState,
+    progress: Progress<LanguageModelResponsePart2>,
+  ): void {
     if (state.stopReason !== StopReason.MODEL_CONTEXT_WINDOW_EXCEEDED) {
       return;
     }
 
-    throw new Error(
-      "The model's context window was exceeded. Try reducing the conversation history, removing tool results, or adjusting model parameters.",
+    logger.warn("[Stream Processor] Model context window exceeded");
+    progress.report(
+      new vscode.LanguageModelTextPart(
+        wrapFallback(
+          "*(The model's context window was exceeded. Try reducing the conversation history, removing tool results, or starting a new conversation.)*",
+        ),
+      ),
     );
+    state.hasEmittedContent = true;
   }
 
-  private validateGuardrailIntervention(state: ProcessingState): void {
+  private validateGuardrailIntervention(
+    state: ProcessingState,
+    progress: Progress<LanguageModelResponsePart2>,
+  ): void {
     if (state.stopReason !== StopReason.GUARDRAIL_INTERVENED) {
       return;
     }
 
+    logger.warn("[Stream Processor] AWS Bedrock Guardrails blocked the response", {
+      hadVisibleOutput: this.hasVisibleOutput(state),
+    });
     const message = this.hasVisibleOutput(state)
-      ? "AWS Bedrock Guardrails blocked the response mid-generation. Some content may have been displayed before intervention. Please check your guardrail configuration or rephrase your request."
-      : "AWS Bedrock Guardrails blocked the response before any content was generated. Please check your guardrail configuration or rephrase your request.";
-    throw new Error(message);
+      ? "*(AWS Bedrock Guardrails blocked the response mid-generation. Some content may have been shown before intervention. Check your guardrail configuration or rephrase your request.)*"
+      : "*(AWS Bedrock Guardrails blocked the request before any response was generated. Check your guardrail configuration or rephrase your request.)*";
+    progress.report(new vscode.LanguageModelTextPart(wrapFallback(message)));
+    state.hasEmittedContent = true;
   }
 
-  private validateStreamResult(state: ProcessingState, token: CancellationToken): void {
-    this.validateContentFiltering(state);
-    this.validateGuardrailIntervention(state);
-    this.validateContextWindow(state);
+  private validateStreamResult(
+    state: ProcessingState,
+    progress: Progress<LanguageModelResponsePart2>,
+    token: CancellationToken,
+  ): void {
+    this.validateContentFiltering(state, progress);
+    this.validateGuardrailIntervention(state, progress);
+    this.validateContextWindow(state, progress);
     this.validateContentEmission(state, token);
   }
 }
@@ -682,4 +728,18 @@ function hasBlockedGuardrail(guardrailData: GuardrailTraceAssessment): boolean {
   }
 
   return false;
+}
+
+/**
+ * Stop reasons handled by `validateStreamResult` (content filtering, guardrail
+ * intervention, context-window exceeded). The generic catch-all fallback must
+ * skip these so the user sees a single specific message instead of a
+ * contradictory generic one plus the specific one.
+ */
+function isValidatorOwnedStopReason(stopReason: string | undefined): boolean {
+  return (
+    stopReason === StopReason.CONTENT_FILTERED ||
+    stopReason === StopReason.GUARDRAIL_INTERVENED ||
+    stopReason === StopReason.MODEL_CONTEXT_WINDOW_EXCEEDED
+  );
 }

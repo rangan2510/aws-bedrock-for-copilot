@@ -14,6 +14,16 @@ This changelog is split into two sections:
 
 ## Fork changelog (`rangan2510/aws-bedrock-for-copilot`)
 
+### [0.13.0-fork.3] - 2026-07-08
+
+#### Fixed
+
+- **Graceful handling of content-filtered, guardrail-blocked, and context-exceeded stops.** When Bedrock ended a stream with `content_filtered`, `guardrail_intervened`, or `model_context_window_exceeded`, the stream processor emitted a generic "the model did not produce a response" fallback *and* then threw a hard error, so the user saw a contradictory double message plus a `Sorry, your request failed` banner. These three stop reasons now degrade to a single clear, actionable fallback message and the turn completes cleanly instead of hard-failing. The catch-all fallback no longer fires for these validator-owned stop reasons.
+
+#### Notes
+
+- **Claude Fable 5 has a stricter built-in input classifier.** Verified via the AWS CLI that Fable 5 works for normal prompts, but its Mythos-class safety classifier can return `content_filtered` with zero input tokens for large agent payloads (e.g. GitHub Copilot's system prompt plus its full tool set) that Opus/Sonnet accept. This is model-side filtering, not a request-construction bug -- if Fable 5 blocks agent-mode requests, use Sonnet 5 or Opus 4.8 for tool-heavy work.
+
 ### [0.13.0-fork.2] - 2026-07-08
 
 #### Added

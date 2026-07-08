@@ -207,6 +207,12 @@ LEGACY-lifecycle models still appear in the picker with a `&#9888;&#xFE0E;` warn
    - `bedrock:InvokeModel` - Invoke models
    - `bedrock:InvokeModelWithResponseStream` - Stream model responses
 
+### Claude Fable 5 blocks agent requests (`content_filtered`)
+
+Fable 5 (Mythos-class) has a notably stricter built-in input classifier than Opus/Sonnet. It works fine for normal prompts, but in agent mode -- where GitHub Copilot sends a large system prompt plus its full tool set -- Fable 5's classifier can reject the request with `content_filtered` and zero input tokens, even for a trivial message like `hi`. This is model-side filtering (verified against the raw Bedrock Converse API), not an extension bug.
+
+When this happens the extension now shows a single clear message instead of failing. The practical fix is to use **Sonnet 5** or **Opus 4.8** for tool-heavy agent work; Fable 5 is better suited to plain chat.
+
 ## Building from source
 
 ```bash
