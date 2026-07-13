@@ -25,6 +25,7 @@ import { convertTools } from "./converters/tools";
 import { logger } from "./logger";
 import { getModelProfile, getModelTokenLimits, resolveEffortLevel } from "./profiles";
 import { getBedrockSettings, type ReasoningEffort, type ThinkingEffort } from "./settings";
+import { statusBar } from "./status-bar";
 import { StreamProcessor, type ThinkingBlock } from "./stream-processor";
 import type { AuthConfig, AuthMethod, BedrockModelSummary } from "./types";
 import { validateBedrockMessages } from "./validation";
@@ -163,6 +164,7 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
           progress?: vscode.Progress<{ message?: string }>,
         ): Promise<LanguageModelChatInformation[]> => {
           progress?.report({ message: "Fetching model list..." });
+          statusBar.startReadingModels();
 
           const [models, apiProfileIds] = await Promise.all([
             this.client.fetchModels(abortController.signal, settings.showDeprecatedModels),
@@ -379,6 +381,7 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
           // Mark initial fetch as complete to allow onDidChangeChatModels handling
           this.initialFetchComplete = true;
 
+          statusBar.finishReadingModels(infos.length);
           return infos;
         };
 
@@ -402,8 +405,13 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
       // Don't log or show errors if the operation was cancelled by the user
       if (error instanceof Error && error.name === "AbortError") {
         logger.info("[Bedrock Model Provider] Model fetch cancelled by user");
+        statusBar.finishReadingModels();
         return [];
       }
+
+      statusBar.reportAccountError(
+        error instanceof Error ? error.message : "failed to read the model list",
+      );
 
       if (!options.silent) {
         logger.error("[Bedrock Model Provider] Failed to fetch models", error);
@@ -1835,6 +1843,8 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
       abortController.abort();
     });
 
+    statusBar.startRequest();
+    let streamFailed = false;
     try {
       const stream = await this.client.startConversationStream(
         requestInput,
@@ -1865,7 +1875,14 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
       }
 
       logger.info("[Bedrock Model Provider] Finished processing stream");
+    } catch (error) {
+      streamFailed = true;
+      statusBar.errorRequest(error instanceof Error ? error.message : undefined);
+      throw error;
     } finally {
+      if (!streamFailed) {
+        statusBar.finishRequest();
+      }
       cancellationListener.dispose();
     }
   }

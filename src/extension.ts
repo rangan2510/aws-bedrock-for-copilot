@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import { manageSettings } from "./commands/manage-settings";
 import { logger } from "./logger";
 import { BedrockChatModelProvider } from "./provider";
+import { statusBar } from "./status-bar";
 
 export function activate(context: vscode.ExtensionContext) {
   const outputChannel = vscode.window.createOutputChannel("AWS Bedrock for Copilot", { log: true });
@@ -30,6 +31,17 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   const provider = new BedrockChatModelProvider(context.secrets, context.globalState);
+
+  // Status bar activity indicator (auto-hides when idle). Clicking it opens the
+  // manage command for quick access to settings.
+  statusBar.initialize({
+    command: "aws-bedrock-for-copilot.manage",
+    enabled:
+      vscode.workspace.getConfiguration("aws-bedrock-for-copilot").get<boolean>("showStatusBar") ??
+      true,
+    label: "Bedrock",
+  });
+
   // Register provider and ensure it is disposed with the extension
   const providerDisposable = vscode.lm.registerLanguageModelChatProvider(
     "aws-bedrock-for-copilot",
@@ -44,6 +56,13 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Refresh provider model list when relevant things change so UI updates immediately
   const cfgDisposable = vscode.workspace.onDidChangeConfiguration((e) => {
+    if (e.affectsConfiguration("aws-bedrock-for-copilot.showStatusBar")) {
+      statusBar.setEnabled(
+        vscode.workspace
+          .getConfiguration("aws-bedrock-for-copilot")
+          .get<boolean>("showStatusBar") ?? true,
+      );
+    }
     if (
       e.affectsConfiguration("aws-bedrock-for-copilot.region") ||
       e.affectsConfiguration("aws-bedrock-for-copilot.profile") ||
@@ -131,6 +150,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     outputChannel,
+    { dispose: () => statusBar.dispose() },
     provider,
     providerDisposable,
     manageCmdDisposable,

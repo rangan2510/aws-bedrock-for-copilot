@@ -10,7 +10,13 @@ import { type CancellationToken, type LanguageModelResponsePart2, type Progress 
 
 import { wrapFallback } from "./fallback-marker";
 import { logger } from "./logger";
+import { statusBar } from "./status-bar";
 import { ToolBuffer } from "./tool-buffer";
+
+/** Rough token estimate from character count (matches the char/4 heuristic used elsewhere). */
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
 
 export interface StreamProcessingResult {
   thinkingBlock?: ThinkingBlock;
@@ -354,6 +360,12 @@ export class StreamProcessor {
   private handleMetadata(metadata: NonNullable<ConverseStreamOutput["metadata"]>): void {
     logger.info("[Stream Processor] Metadata received:", metadata);
 
+    // Snap the status bar token counter to the exact output-token usage if present.
+    const outputTokens = metadata?.usage?.outputTokens;
+    if (typeof outputTokens === "number" && outputTokens > 0) {
+      statusBar.setExactOutputTokens(outputTokens);
+    }
+
     const guardrailData = metadata?.trace?.guardrail;
     if (!guardrailData) {
       return;
@@ -392,6 +404,7 @@ export class StreamProcessor {
       );
       state.capturedThinkingBlock ??= { text: "" };
       state.capturedThinkingBlock.text += reasoningText;
+      statusBar.addTokens(estimateTokens(reasoningText));
 
       // Emit thinking part to VS Code so it shows in the collapsible thinking UI.
       // Wrapped in try-catch because:
@@ -449,6 +462,7 @@ export class StreamProcessor {
       state.textChunkCount++;
       logger.trace("[Stream Processor] Text delta received, length:", text.length);
       progress.report(new vscode.LanguageModelTextPart(text));
+      statusBar.addTokens(estimateTokens(text));
       state.hasEmittedContent = true;
     } else if (text !== undefined && typeof text !== "string") {
       // Guard against non-string values (e.g. metadata objects) leaking through

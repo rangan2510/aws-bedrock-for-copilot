@@ -14,6 +14,12 @@ This changelog is split into two sections:
 
 ## Fork changelog (`rangan2510/aws-bedrock-for-copilot`)
 
+### [0.13.0-fork.4] - 2026-07-13
+
+#### Added
+
+- **Status bar activity indicator.** A status bar item now shows live extension activity and auto-hides when idle, so with multiple providers installed only the one currently working is visible. States: `reading models` (startup/refresh), `models ready (N)`, `streaming · N tok` (live token estimate that snaps to the exact output-token count from the Bedrock metadata event), `account error`, and `stream error`. Reference-counted for concurrent agent requests. Clicking it opens the Manage command. New setting `aws-bedrock-for-copilot.showStatusBar` (default `true`) to disable it.
+
 ### [0.13.0-fork.3] - 2026-07-08
 
 #### Fixed

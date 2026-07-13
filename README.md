@@ -37,6 +37,7 @@ Bugfixes and additions over upstream `v0.11.0`. CLI-verified against the live Be
 - Model picker shows capability summary inline (context, output, thinking mode, vision)
 - Deprecated (LEGACY) models are hidden by default; re-enable with `showDeprecatedModels`
 - Context safety margin reserves response headroom on 1M-context models to avoid context-overflow errors (`contextSafetyMargin`, default 32K)
+- Status bar activity indicator: shows `reading models` / `streaming · N tok` / errors, auto-hides when idle (`showStatusBar`, default on)
 - Utility model commands: pick a Bedrock model for VS Code's background utility flows, or route them to your main model (VS Code 1.128+ BYOK utility setting)
 - Region setting is now a dropdown of known Bedrock regions
 

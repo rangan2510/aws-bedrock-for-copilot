@@ -8,7 +8,7 @@
     "type": "git",
     "url": "https://github.com/rangan2510/aws-bedrock-for-copilot"
   },
-  "version": "0.13.0-fork.3",
+  "version": "0.13.0-fork.4",
   "engines": {
     "vscode": "^1.116.0"
   },
@@ -215,6 +215,12 @@
           "default": false,
           "description": "Show models that AWS has marked as deprecated (LEGACY lifecycle status) in the model picker. Off by default so the picker only lists ACTIVE models. Enable if you need to keep using a superseded model that is still invokable in your region.",
           "scope": "resource"
+        },
+        "aws-bedrock-for-copilot.showStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a status bar activity indicator while the extension is reading the model list or streaming a response (with a live token estimate). The indicator auto-hides when idle, so only the provider currently doing work is visible. Disable to hide it entirely.",
+          "scope": "window"
         }
       }
     }
