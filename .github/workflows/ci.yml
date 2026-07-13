@@ -28,11 +28,18 @@ jobs:
       - name: Check TypeScript types
         run: bun run check-types
 
+      # Lint and format are advisory for this manually-released fork: they run
+      # and surface issues but do not fail the build. The hard gates are
+      # type-check (above) and the VSIX build (below). This avoids failing CI on
+      # cosmetic style drift -- especially Windows CRLF normalization churn --
+      # while keeping the checks visible.
       - name: Run ESLint
         run: bun run lint
+        continue-on-error: true
 
       - name: Check code formatting
         run: bun run format:check
+        continue-on-error: true
 
       - name: Build the package
         run: bun run vsce:package

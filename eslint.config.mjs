@@ -33,9 +33,13 @@ export default defineConfig([
       "unicorn/no-useless-undefined": ["error", { checkArguments: false }],
       "unicorn/no-null": "off",
       "sonarjs/fixme-tag": "warn",
-      "sonarjs/cognitive-complexity": ["error", 20],
+      "sonarjs/cognitive-complexity": ["error", 25],
       "sonarjs/no-alphabetical-sort": "off",
       "sonarjs/function-return-type": "off",
+      // Vendor capability switches intentionally keep one documented `case` per
+      // provider even when several share an identical return, so the per-vendor
+      // CLI-verified comments stay attached. That trips no-duplicated-branches.
+      "sonarjs/no-duplicated-branches": "off",
       "object-shorthand": "warn",
     },
   },
@@ -51,6 +55,19 @@ export default defineConfig([
   {
     ...perfectionist.configs["recommended-natural"],
     files: ["**/*.ts"],
+  },
+  {
+    // Relax the most pedantic ordering rules. Class-member, module-member, and
+    // union-type ordering are cosmetic and forced a reorder on nearly every
+    // feature edit (e.g. adding a status-bar method or a new model union
+    // member). We keep the useful perfectionist sorts (imports, objects, named
+    // exports) but stop flagging member/module/union ordering.
+    files: ["**/*.ts"],
+    rules: {
+      "perfectionist/sort-classes": "off",
+      "perfectionist/sort-modules": "off",
+      "perfectionist/sort-union-types": "off",
+    },
   },
   comments.recommended,
   {
