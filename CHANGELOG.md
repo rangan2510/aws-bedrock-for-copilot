@@ -14,6 +14,16 @@ This changelog is split into two sections:
 
 ## Fork changelog (`rangan2510/aws-bedrock-for-copilot`)
 
+### [0.13.0-fork.5] - 2026-07-29
+
+#### Added
+
+- **Claude Opus 5 support** (`anthropic.claude-opus-5`). CLI-verified live on Bedrock: ACTIVE, INFERENCE_PROFILE-only, TEXT+IMAGE input, TEXT output, streaming, 1M context window, 128K max output. Adaptive-thinking-only -- `thinking.type="enabled"` is rejected with `"thinking.type.enabled" is not supported for this model`, so the extension sends `thinking: {type: "adaptive"}` plus `output_config.effort`. Temperature is deprecated (only `1` is accepted; other values return `temperature may only be set to 1 when thinking is enabled or in adaptive mode`). Full effort range verified: `low`, `medium`, `high`, `xhigh`, and `max` all accepted. Tool calling (`stopReason: tool_use`) and prompt-caching `cachePoint` blocks verified working. Added to the `detectAnthropicFallbackModels` probe with `us.`, `eu.`, and `global.` profile candidates (CLI-verified -- no `jp.`/`au.` regional profiles at launch).
+
+#### Changed
+
+- **Deduplicated regional inference-profile helpers.** Fable 5 / Mythos 5 and Opus 5 share identical `us.`/`eu.`/`global.` profile coverage, so `getFable5GeoPrefix` and `getFable5RegionalProfileIds` were generalised into `getUsEuGeoPrefix` and `getUsEuRegionalProfileIds` instead of duplicating the logic per model.
+
 ### [0.13.0-fork.4] - 2026-07-13
 
 #### Added

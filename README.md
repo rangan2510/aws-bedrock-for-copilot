@@ -20,6 +20,7 @@ Bugfixes and additions over upstream `v0.11.0`. CLI-verified against the live Be
 
 **Newer Claude support**
 
+- Opus 5: adaptive-thinking-only, deprecated `temperature` handled, 1M / 128K limits, vision, tool use, full effort range (`low` -> `max`, including `xhigh`). CLI-verified against the live Converse API.
 - Sonnet 5 (Fennec): adaptive-thinking, deprecated `temperature` handled, 1M / 128K limits, vision, tool use, full effort range (`low` -> `max`, including `xhigh`).
 - Fable 5 (Mythos-class): adaptive-thinking-only, deprecated `temperature` handled, 1M / 128K limits, vision, tool use, full effort range (`low` -> `max`). Note: Bedrock requires the AWS account to opt in to data retention (`provider_data_share`) before invoking Fable 5; without that, Bedrock returns `ValidationException: data retention mode 'default' is not available for this model`.
 - Opus 4.8 / 4.7: adaptive thinking, deprecated `temperature` handled, correct 1M / 128K limits
@@ -161,7 +162,7 @@ Models must be **enabled** in your [Bedrock Model Access console](https://consol
 
 | Family | How to control depth | Settings key |
 | --- | --- | --- |
-| Claude Opus 4.6, 4.7, 4.8, Sonnet 4.6 | adaptive thinking + `effort` (low/medium/high/xhigh/max) | `aws-bedrock-for-copilot.anthropic.thinking.effort` |
+| Claude Opus 5, Opus 4.6, 4.7, 4.8, Sonnet 5, Sonnet 4.6, Fable 5 | adaptive thinking + `effort` (low/medium/high/xhigh/max) | `aws-bedrock-for-copilot.anthropic.thinking.effort` |
 | Claude Opus 4.5, 4.1, 4, Sonnet 4.5, Sonnet 4, Haiku 4.5 | enabled thinking + `budget_tokens` | `aws-bedrock-for-copilot.anthropic.thinking.budgetTokens` |
 | OpenAI gpt-oss, DeepSeek V3.2, Kimi K2.x, Qwen3, GLM 4.7/5, MiniMax M2.x | OpenAI-style `reasoning_effort` (minimal/low/medium/high) | `aws-bedrock-for-copilot.reasoningEffort` |
 | Everything else (Nova, Llama, Gemma, Mistral, NVIDIA, Cohere, AI21, Writer, &hellip;) | no reasoning controls; settings above are ignored | -- |

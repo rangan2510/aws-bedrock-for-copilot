@@ -8,7 +8,7 @@
     "type": "git",
     "url": "https://github.com/rangan2510/aws-bedrock-for-copilot"
   },
-  "version": "0.13.0-fork.4",
+  "version": "0.13.0-fork.5",
   "engines": {
     "vscode": "^1.116.0"
   },
@@ -160,16 +160,16 @@
             "Most efficient. Significant token savings with some capability reduction. Best for simpler tasks that need speed and lowest costs.",
             "Balanced approach with moderate token savings. Good for tasks requiring a balance of speed, cost, and performance.",
             "Maximum capability (default). Claude uses as many tokens as needed for excellent results. Recommended for complex reasoning and coding.",
-            "Extended capability for long-horizon agentic work (Opus 4.7, 4.8 only). Falls back to 'high' on other models. Use with large max_tokens for coding/agentic tasks.",
-            "Absolute maximum capability with no constraints on token spending (Opus 4.6, 4.7, 4.8, Sonnet 4.6 only). Falls back to 'high' on other models."
+            "Extended capability for long-horizon agentic work (Opus 5, Opus 4.7, 4.8, Sonnet 5, Fable 5 only). Falls back to 'high' on other models. Use with large max_tokens for coding/agentic tasks.",
+            "Absolute maximum capability with no constraints on token spending (Opus 5, Opus 4.6, 4.7, 4.8, Sonnet 5, Sonnet 4.6, Fable 5 only). Falls back to 'high' on other models."
           ],
-          "description": "Thinking effort level for adaptive-thinking Claude models (Opus 4.6, 4.7, 4.8, Sonnet 4.6, Fable 5). Controls how eager Claude is about spending tokens. Some levels are model-gated; unsupported levels fall back to 'high'.",
+          "description": "Thinking effort level for adaptive-thinking Claude models (Opus 5, Opus 4.6, 4.7, 4.8, Sonnet 5, Sonnet 4.6, Fable 5). Controls how eager Claude is about spending tokens. Some levels are model-gated; unsupported levels fall back to 'high'.",
           "scope": "resource"
         },
         "aws-bedrock-for-copilot.anthropic.context1M.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable 1M context window for Claude Opus 4.6 and Sonnet 4.6. (Opus 4.7, 4.8, and Fable 5 always use 1M.) When enabled, these models can handle up to 1 million tokens of input context. Note: 1M context costs more.",
+          "description": "Enable 1M context window for Claude Opus 4.6 and Sonnet 4.6. (Opus 5, Opus 4.7, 4.8, Sonnet 5, and Fable 5 always use 1M.) When enabled, these models can handle up to 1 million tokens of input context. Note: 1M context costs more.",
           "scope": "resource"
         },
         "aws-bedrock-for-copilot.anthropic.inferenceProfiles.preferRegional": {

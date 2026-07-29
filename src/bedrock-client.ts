@@ -536,10 +536,24 @@ export class BedrockAPIClient {
         baseModelId: "anthropic.claude-fable-5",
         displayName: "Claude Fable 5",
         globalProfileId: hasGlobalProfiles ? "global.anthropic.claude-fable-5" : null,
-        regionalProfileIds: getFable5RegionalProfileIds(
+        regionalProfileIds: getUsEuRegionalProfileIds(
           this.region,
           regionPrefix,
           "anthropic.claude-fable-5",
+        ),
+      },
+      {
+        // Claude Opus 5: 1M context, 128K output, adaptive-thinking-only,
+        // vision, tool use, full effort range including xhigh and max.
+        // INFERENCE_PROFILE-only. CLI-verified 2026-07-29: `us.`, `eu.`, and
+        // `global.` profiles exist (no `jp.`/`au.` yet).
+        baseModelId: "anthropic.claude-opus-5",
+        displayName: "Claude Opus 5",
+        globalProfileId: hasGlobalProfiles ? "global.anthropic.claude-opus-5" : null,
+        regionalProfileIds: getUsEuRegionalProfileIds(
+          this.region,
+          regionPrefix,
+          "anthropic.claude-opus-5",
         ),
       },
       {
@@ -932,14 +946,14 @@ function getClaude47GeoPrefix(region: string): string | undefined {
 }
 
 /**
- * Geo prefix for Fable 5 / Mythos 5. As of 2026-06-09 these models only have
- * `us.` and `eu.` regional inference profiles plus a `global.` profile (no
- * `jp.` / `au.` regional profiles yet, unlike Opus 4.7/4.8). Returning
- * undefined for ap-northeast and ap-southeast keeps us off non-existent
- * profile IDs that would otherwise fail the accessibility probe and waste
- * GetInferenceProfile calls.
+ * Geo prefix for models that only publish `us.` and `eu.` regional inference
+ * profiles (plus `global.`) -- currently Fable 5 / Mythos 5 (as of 2026-06-09)
+ * and Opus 5 (CLI-verified 2026-07-29). Unlike Opus 4.7/4.8 these have no
+ * `jp.` / `au.` regional profiles, so returning undefined for ap-northeast and
+ * ap-southeast keeps us off non-existent profile IDs that would otherwise fail
+ * the accessibility probe and waste GetInferenceProfile calls.
  */
-function getFable5GeoPrefix(region: string): string | undefined {
+function getUsEuGeoPrefix(region: string): string | undefined {
   if ((region.startsWith("us-") && !region.startsWith("us-gov-")) || region.startsWith("ca-")) {
     return "us";
   }
@@ -982,20 +996,20 @@ function getClaude47RegionalProfileIds(
 }
 
 /**
- * Build the candidate regional profile IDs for Fable 5 / Mythos 5.
- * As of launch these models only have `us.` and `eu.` regional profiles
- * (plus `global.`), so we deliberately do NOT seed the geo prefix in regions
- * outside us-, ca-, and eu- partitions. The default region prefix is still
- * added so any future regional rollout (e.g. an `apac.` or `jp.` profile) is
- * detected automatically by the accessibility probe.
+ * Build the candidate regional profile IDs for models that only publish `us.`
+ * and `eu.` regional profiles (plus `global.`) -- Fable 5 / Mythos 5 and Opus 5.
+ * We deliberately do NOT seed a geo prefix in regions outside us-, ca-, and
+ * eu- partitions. The default region prefix is still added so any future
+ * regional rollout (e.g. an `apac.` or `jp.` profile) is detected
+ * automatically by the accessibility probe.
  */
-function getFable5RegionalProfileIds(
+function getUsEuRegionalProfileIds(
   region: string,
   defaultRegionPrefix: string,
   baseModelId: string,
 ): string[] {
   const prefixes = new Set<string>();
-  const geoPrefix = getFable5GeoPrefix(region);
+  const geoPrefix = getUsEuGeoPrefix(region);
 
   if (geoPrefix) {
     prefixes.add(geoPrefix);
