@@ -31,6 +31,46 @@ interface ImageDataPart {
 }
 
 /**
+ * Anthropic (via Bedrock Converse) validates `tool_use.id` / `tool_result.id`
+ * against `^[a-zA-Z0-9_-]+$` and rejects the entire request otherwise with
+ * `ValidationException: messages.N.content.0.tool_use.id: String should match
+ * pattern '^[a-zA-Z0-9_-]+$'`.
+ *
+ * VS Code does not guarantee that shape -- tool call IDs coming from Copilot's
+ * own tools, MCP servers, or custom agents can contain dots, colons, slashes,
+ * or other characters. Bedrock-originated IDs are already valid, so this is a
+ * no-op for them.
+ *
+ * The mapping MUST be deterministic: the same VS Code call ID appears once in
+ * the assistant `toolUse` block and again in the following user `toolResult`
+ * block, and Bedrock requires the two to match exactly. A pure
+ * character-for-character substitution guarantees that without any state.
+ */
+const VALID_TOOL_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+function sanitizeToolId(callId: string): string {
+  if (VALID_TOOL_ID_PATTERN.test(callId)) {
+    return callId;
+  }
+
+  // Replace each disallowed character with "_" (1:1, so distinct IDs stay distinct
+  // for all practical purposes and the transform is stable across turns).
+  const sanitized = callId.replaceAll(/[^a-zA-Z0-9_-]/g, "_");
+
+  // An ID consisting purely of disallowed characters would sanitize to only
+  // underscores, which is still valid; but an empty input would not be, so
+  // fall back to a fixed placeholder.
+  const safe = sanitized.length > 0 ? sanitized : "tool_call";
+
+  logger.debug("[Message Converter] Sanitized tool call ID for Bedrock", {
+    original: callId,
+    sanitized: safe,
+  });
+
+  return safe;
+}
+
+/**
  * Convert VSCode language model messages to Bedrock API format
  */
 export function convertMessages(
@@ -579,7 +619,7 @@ function processToolCallPart(part: vscode.LanguageModelToolCallPart): ContentBlo
     toolUse: {
       input: part.input as DocumentType,
       name: part.name,
-      toolUseId: part.callId,
+      toolUseId: sanitizeToolId(part.callId),
     },
   };
 }
@@ -637,7 +677,7 @@ function processToolResultPart(
   return {
     toolResult: {
       content: [contentBlock],
-      toolUseId: part.callId,
+      toolUseId: sanitizeToolId(part.callId),
       ...(status ? { status } : {}),
     },
   } satisfies ContentBlock.ToolResultMember;

@@ -14,6 +14,12 @@ This changelog is split into two sections:
 
 ## Fork changelog (`rangan2510/aws-bedrock-for-copilot`)
 
+### [0.13.0-fork.6] - 2026-08-02
+
+#### Fixed
+
+- **Tool call IDs are now sanitized to Anthropic's required pattern.** Requests failed outright with `ValidationException: messages.N.content.0.tool_use.id: String should match pattern '^[a-zA-Z0-9_-]+$'` whenever a tool call ID contained a character Anthropic rejects (a dot, colon, slash, `@`, space, and so on). VS Code does not guarantee that shape -- IDs originating from Copilot's own tools, MCP servers, or custom agents can contain them -- and a single offending ID anywhere in the conversation history rejected the whole request, so a session could become permanently stuck. Tool IDs are now sanitized on both the `toolUse` and `toolResult` paths using a deterministic character-for-character substitution, which keeps the two sides matching (Bedrock requires them to pair exactly). Already-valid IDs, including every Bedrock-originated one, pass through unchanged.
+
 ### [0.13.0-fork.5] - 2026-07-29
 
 #### Added
