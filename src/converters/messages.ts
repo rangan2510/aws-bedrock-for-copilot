@@ -7,6 +7,7 @@ import {
   type ToolResultContentBlock,
 } from "@aws-sdk/client-bedrock-runtime";
 import type { DocumentType } from "@smithy/types";
+import { createHash } from "node:crypto";
 import { inspect, MIMEType, types } from "node:util";
 import * as vscode from "vscode";
 
@@ -31,39 +32,55 @@ interface ImageDataPart {
 }
 
 /**
- * Anthropic (via Bedrock Converse) validates `tool_use.id` / `tool_result.id`
- * against `^[a-zA-Z0-9_-]+$` and rejects the entire request otherwise with
- * `ValidationException: messages.N.content.0.tool_use.id: String should match
- * pattern '^[a-zA-Z0-9_-]+$'`.
+ * Bedrock/Anthropic constraints on `tool_use.id` / `tool_result.id`:
+ *  - must match `^[a-zA-Z0-9_-]+$` (Anthropic model-level validation)
+ *  - must be at most 64 characters (Bedrock API-level validation)
+ * Violating either rejects the ENTIRE request, so one bad ID anywhere in the
+ * history can wedge a whole conversation.
  *
- * VS Code does not guarantee that shape -- tool call IDs coming from Copilot's
- * own tools, MCP servers, or custom agents can contain dots, colons, slashes,
- * or other characters. Bedrock-originated IDs are already valid, so this is a
- * no-op for them.
+ * VS Code does not guarantee either property: IDs from Copilot's own tools, MCP
+ * servers, or custom agents can contain dots/colons/slashes and can be long.
  *
- * The mapping MUST be deterministic: the same VS Code call ID appears once in
- * the assistant `toolUse` block and again in the following user `toolResult`
- * block, and Bedrock requires the two to match exactly. A pure
- * character-for-character substitution guarantees that without any state.
+ * Two requirements shape this function:
+ *
+ * 1. DETERMINISTIC. The same call ID appears in the assistant `toolUse` block
+ *    and again in the following user `toolResult` block, sanitized by
+ *    independent calls. Bedrock requires the pair to match exactly, so the
+ *    transform must be pure and stateless.
+ *
+ * 2. INJECTIVE. A plain character substitution is NOT safe: `call.1` and
+ *    `call_1` would both become `call_1`, so two distinct tool calls would
+ *    collide onto one ID and Bedrock would reject the request (or pair a result
+ *    with the wrong call). We therefore append a short hash of the ORIGINAL id
+ *    so distinct inputs keep distinct outputs.
+ *
+ * Already-valid, already-short IDs (which includes every Bedrock-originated
+ * one) are returned untouched so the common path is a no-op.
  */
 const VALID_TOOL_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+const MAX_TOOL_ID_LENGTH = 64;
+const TOOL_ID_HASH_LENGTH = 8;
 
 function sanitizeToolId(callId: string): string {
-  if (VALID_TOOL_ID_PATTERN.test(callId)) {
+  if (VALID_TOOL_ID_PATTERN.test(callId) && callId.length <= MAX_TOOL_ID_LENGTH) {
     return callId;
   }
 
-  // Replace each disallowed character with "_" (1:1, so distinct IDs stay distinct
-  // for all practical purposes and the transform is stable across turns).
-  const sanitized = callId.replaceAll(/[^a-zA-Z0-9_-]/g, "_");
+  // Short, stable hash of the original ID; keeps the mapping injective in
+  // practice even when the substituted prefixes are identical or truncated.
+  const hash = createHash("sha256")
+    .update(callId)
+    .digest("hex")
+    .slice(0, TOOL_ID_HASH_LENGTH);
 
-  // An ID consisting purely of disallowed characters would sanitize to only
-  // underscores, which is still valid; but an empty input would not be, so
-  // fall back to a fixed placeholder.
-  const safe = sanitized.length > 0 ? sanitized : "tool_call";
+  const substituted = callId.replaceAll(/[^a-zA-Z0-9_-]/g, "_");
+  const prefixBudget = MAX_TOOL_ID_LENGTH - TOOL_ID_HASH_LENGTH - 1; // 1 for "_"
+  const prefix = substituted.slice(0, prefixBudget) || "tool";
+  const safe = `${prefix}_${hash}`;
 
   logger.debug("[Message Converter] Sanitized tool call ID for Bedrock", {
     original: callId,
+    originalLength: callId.length,
     sanitized: safe,
   });
 

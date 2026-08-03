@@ -14,6 +14,14 @@ This changelog is split into two sections:
 
 ## Fork changelog (`rangan2510/aws-bedrock-for-copilot`)
 
+### [0.13.0-fork.7] - 2026-08-03
+
+#### Fixed
+
+- **Tool ID sanitization no longer collides distinct tool calls.** The `fork.6` sanitizer replaced each disallowed character with `_`, which was not injective: `call.1` and `call_1` both mapped to `call_1`. When both appeared in one conversation Bedrock saw duplicate `toolUse` IDs (or paired a `toolResult` with the wrong call) and rejected requests that had previously worked -- so the fix for invalid IDs broke valid ones. Sanitized IDs now carry a short SHA-256 suffix derived from the original ID, keeping the mapping injective while remaining pure and deterministic so the `toolUse` / `toolResult` pair still matches.
+- **Tool IDs longer than 64 characters are now truncated.** Bedrock enforces `Member must have length less than or equal to 64` on `toolUse.toolUseId` and `toolResult.toolUseId` (CLI-verified). Long IDs -- realistic for MCP servers and custom agents -- previously failed the request. Sanitized IDs are now capped at 64 characters, with the hash suffix preserved so truncated prefixes cannot collide.
+- Valid IDs that are already within the length limit -- including every Bedrock-originated ID -- continue to pass through completely untouched.
+
 ### [0.13.0-fork.6] - 2026-08-02
 
 #### Fixed
