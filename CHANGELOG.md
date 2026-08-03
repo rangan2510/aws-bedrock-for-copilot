@@ -14,6 +14,21 @@ This changelog is split into two sections:
 
 ## Fork changelog (`rangan2510/aws-bedrock-for-copilot`)
 
+### [0.13.0-fork.8] - 2026-08-03
+
+#### Fixed
+
+Four latent caching bugs found by tracing the client's error paths. All shared one root cause: session-lifetime caches were populated on *any* error, so a single transient failure (throttling, cancellation, 5xx, network blip) was recorded as a permanent capability verdict. A new `isTransientAwsError` classifier now gates every one of these decisions.
+
+- **Transient CountTokens failures are no longer cached as "unsupported".** One `ThrottlingException` or cancelled request marked a model as lacking CountTokens for the rest of the session, silently downgrading it to `char/4` estimation. Because inaccurate token counts are what trigger context-overflow errors on 1M-context models, a momentary rate limit could degrade accuracy long after it passed.
+- **Cancelled `GetInferenceProfile` lookups are no longer cached as negative results.** This was the most damaging: VS Code aborts token-count requests constantly while the user types, and one abort permanently cached an inference-profile ARN as "not a profile". `getModelProfile` / `getModelTokenLimits` then received the raw ARN instead of the base model ID, so the model silently lost its thinking mode, effort support, and correct token limits.
+- **The CountTokens "unsupported" set is now cleared when clients are recreated.** `recreateClients()` cleared the inference-profile cache but not this set, even though CountTokens support is region- and credential-specific. After switching region or profile, models stayed incorrectly marked unsupported.
+- **The model accessibility probe now fails open on transient errors.** The probe decides which models appear in the picker and returned `false` for any unexpected error, so cancelling model loading or hitting a network blip could make genuinely-accessible models silently disappear. Throttling was already handled this way; the same reasoning now covers cancellation, 5xx, and network failures.
+
+#### Internal
+
+- Corrected a stale field name in `bedrock-client.test.ts` (`unsupportedCountTokensModels` -> `unsupportedCountTokensModelIds`). The mismatch was invisible to the compiler because the test reaches internals through an `as unknown as` cast, so four assertions had been silently reading `undefined` rather than testing the cache. The suite now runs fully green (90 passing, 0 failing; previously 84 passing, 6 failing).
+
 ### [0.13.0-fork.7] - 2026-08-03
 
 #### Fixed

@@ -9,7 +9,7 @@ interface BedrockAPIClientInternals {
   bedrockRuntimeClient: MockSendClient;
   detectAnthropicFallbackModels: (abortSignal?: AbortSignal) => Promise<BedrockModelSummary[]>;
   inferenceProfileCache: Map<string, string>;
-  unsupportedCountTokensModels: Set<string>;
+  unsupportedCountTokensModelIds: Set<string>;
 }
 
 interface MockSendClient {
@@ -71,7 +71,7 @@ suite("BedrockAPIClient unit tests", () => {
       await client.countTokens("openai.gpt-oss-120b-1:0", countTokensInput);
 
       assert.equal(countTokensCalls, 2);
-      assert.equal(state.unsupportedCountTokensModels.has("openai.gpt-oss-120b-1:0"), false);
+      assert.equal(state.unsupportedCountTokensModelIds.has("openai.gpt-oss-120b-1:0"), false);
     });
 
     test("caches deterministic CountTokens unsupported failures", async () => {
@@ -90,7 +90,7 @@ suite("BedrockAPIClient unit tests", () => {
       await client.countTokens("openai.gpt-oss-120b-1:0", countTokensInput);
 
       assert.equal(countTokensCalls, 1);
-      assert.equal(state.unsupportedCountTokensModels.has("openai.gpt-oss-120b-1:0"), true);
+      assert.equal(state.unsupportedCountTokensModelIds.has("openai.gpt-oss-120b-1:0"), true);
     });
 
     test("caches current CountTokens unsupported validation messages", async () => {
@@ -112,7 +112,7 @@ suite("BedrockAPIClient unit tests", () => {
       await client.countTokens("openai.gpt-oss-120b-1:0", countTokensInput);
 
       assert.equal(countTokensCalls, 1);
-      assert.equal(state.unsupportedCountTokensModels.has("openai.gpt-oss-120b-1:0"), true);
+      assert.equal(state.unsupportedCountTokensModelIds.has("openai.gpt-oss-120b-1:0"), true);
     });
 
     test("caches structured not-found CountTokens responses", async () => {
@@ -131,17 +131,17 @@ suite("BedrockAPIClient unit tests", () => {
       await client.countTokens("openai.gpt-oss-120b-1:0", countTokensInput);
 
       assert.equal(countTokensCalls, 1);
-      assert.equal(state.unsupportedCountTokensModels.has("openai.gpt-oss-120b-1:0"), true);
+      assert.equal(state.unsupportedCountTokensModelIds.has("openai.gpt-oss-120b-1:0"), true);
     });
 
     test("clears CountTokens unsupported cache when clients are recreated", () => {
       const client = new BedrockAPIClient("us-east-1");
       const state = internals(client);
-      state.unsupportedCountTokensModels.add("openai.gpt-oss-120b-1:0");
+      state.unsupportedCountTokensModelIds.add("openai.gpt-oss-120b-1:0");
 
       client.setRegion("us-west-2");
 
-      assert.equal(state.unsupportedCountTokensModels.size, 0);
+      assert.equal(state.unsupportedCountTokensModelIds.size, 0);
     });
   });
 

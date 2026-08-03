@@ -126,6 +126,19 @@ export class BedrockAPIClient {
         modelId,
       });
 
+      // Only cache DEFINITIVE failures. A transient error (throttling,
+      // cancellation, 5xx, network blip) says nothing about whether the model
+      // supports CountTokens, and this cache never expires -- so caching one
+      // would silently downgrade the model to char/4 estimation for the rest of
+      // the session.
+      if (isTransientAwsError(error)) {
+        logger.trace(
+          `[Bedrock API Client] CountTokens failed transiently for model ${modelId}; will retry on next call`,
+          error instanceof Error ? error.message : String(error),
+        );
+        return undefined;
+      }
+
       // If the CountTokens API is not supported for this model/region, return undefined
       // The caller should fall back to estimation
       this.unsupportedCountTokensModelIds.add(modelId);
@@ -431,7 +444,22 @@ export class BedrockAPIClient {
 
       return baseModelId;
     } catch (error) {
-      // If GetInferenceProfile fails, assume it's a regular model ID.
+      // Transient failures (especially AbortError -- VS Code cancels token-count
+      // requests constantly while the user types) must NOT be cached. This cache
+      // never expires, so caching a negative result here would make the ARN
+      // resolve to itself for the rest of the session, and getModelProfile /
+      // getModelTokenLimits would then receive the raw ARN instead of the base
+      // model ID -- silently losing the model's thinking mode, effort support,
+      // and token limits.
+      if (isTransientAwsError(error)) {
+        logger.trace(
+          `[Bedrock API Client] GetInferenceProfile failed transiently for ${modelId}; not caching, will retry`,
+          error instanceof Error ? error.message : String(error),
+        );
+        return modelId;
+      }
+
+      // If GetInferenceProfile fails definitively, assume it's a regular model ID.
       // Cache the negative result (mapping to itself) so we don't hammer the
       // API on every token-count call -- Copilot Chat issues many of those
       // per turn and each round-trip adds noticeable latency.
@@ -844,6 +872,13 @@ export class BedrockAPIClient {
 
     // Clear inference profile cache since profiles may differ across regions/credentials
     this.inferenceProfileCache.clear();
+
+    // CountTokens support is region- and credential-specific: a model without
+    // CountTokens in one region may support it in another, and the previous
+    // region's answers say nothing about the new one. Keeping stale entries
+    // would leave those models permanently downgraded to char/4 estimation
+    // after a region or profile switch.
+    this.unsupportedCountTokensModelIds.clear();
   }
 
   /**
@@ -878,9 +913,13 @@ export class BedrockAPIClient {
         logger.debug(`[Bedrock API Client] ${resourceType} ${modelId} validation failed`, error);
         return false;
       }
-      if (error instanceof ThrottlingException) {
+      // Transient failures say nothing about accessibility, so fail OPEN and keep
+      // the model in the picker. Failing closed here would silently drop
+      // genuinely-accessible models whenever the user cancels model loading
+      // (AbortError) or hits a throttle / 5xx / network blip during the probe.
+      if (isTransientAwsError(error)) {
         logger.debug(
-          `[Bedrock API Client] ${resourceType} ${modelId} accessible (throttled)`,
+          `[Bedrock API Client] ${resourceType} ${modelId} assumed accessible (transient probe failure)`,
           error,
         );
         return true;
@@ -907,6 +946,81 @@ export class ListFoundationModelsDeniedError extends Error {
     super("ListFoundationModelsAccessDenied", { cause });
     this.name = "ListFoundationModelsDeniedError";
   }
+}
+
+/**
+ * Returns true when an error is transient -- i.e. the same call could succeed
+ * if retried later -- and therefore must NOT be cached as a definitive
+ * negative result.
+ *
+ * This matters because both the CountTokens "unsupported" set and the inference
+ * profile cache are session-lifetime and never expire. Caching a transient
+ * failure permanently degrades the session:
+ *  - a throttled CountTokens call would fall back to char/4 estimation forever,
+ *    and inaccurate token counts are what trigger 1M-context overflow errors
+ *  - a cancelled GetInferenceProfile call would make an ARN resolve to itself
+ *    forever, so getModelProfile/getModelTokenLimits would receive the raw ARN
+ *    instead of the base model ID and silently lose the model's capabilities
+ *
+ * Cancellation is the common case: VS Code aborts token-count requests
+ * constantly while the user types.
+ */
+function isTransientAwsError(error: unknown): boolean {
+  if (error instanceof ThrottlingException) {
+    return true;
+  }
+
+  if (!(error instanceof Error)) {
+    // Unknown shape -- treat as transient so we fail open rather than poisoning
+    // a cache on something we do not understand.
+    return true;
+  }
+
+  // Cancellation (VS Code aborting the request) is never a capability signal.
+  if (error.name === "AbortError" || error.name === "TimeoutError") {
+    return true;
+  }
+
+  const transientNames = new Set([
+    "InternalServerException",
+    "ModelNotReadyException",
+    "ModelTimeoutException",
+    "RequestTimeout",
+    "RequestTimeoutException",
+    "ServiceQuotaExceededException",
+    "ServiceUnavailableException",
+    "ThrottlingException",
+    "TooManyRequestsException",
+  ]);
+  if (transientNames.has(error.name)) {
+    return true;
+  }
+
+  // Network-level failures surface as plain Errors with a syscall-ish code.
+  const code = (error as { code?: unknown }).code;
+  if (typeof code === "string") {
+    const transientCodes = new Set([
+      "ECONNABORTED",
+      "ECONNRESET",
+      "ENETUNREACH",
+      "ENOTFOUND",
+      "EPIPE",
+      "ETIMEDOUT",
+    ]);
+    if (transientCodes.has(code)) {
+      return true;
+    }
+  }
+
+  // 429 and 5xx are retryable; 4xx (other than 429) is a definitive answer.
+  const status =
+    (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode ??
+    (error as { $response?: { statusCode?: number } }).$response?.statusCode;
+  if (typeof status === "number" && (status === 429 || status >= 500)) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
