@@ -21,7 +21,7 @@ import * as vscode from "vscode";
 import { getRegionPrefix } from "./aws-partition";
 import { BedrockAPIClient, ListFoundationModelsDeniedError } from "./bedrock-client";
 import { convertMessages, stripThinkingContent } from "./converters/messages";
-import { convertTools } from "./converters/tools";
+import { buildToolNameReverseMap, convertTools } from "./converters/tools";
 import { logger } from "./logger";
 import { getModelProfile, getModelTokenLimits, resolveEffortLevel } from "./profiles";
 import { getBedrockSettings, type ReasoningEffort, type ThinkingEffort } from "./settings";
@@ -628,6 +628,12 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
         settings.promptCaching.enabled,
       );
 
+      // Map sanitized tool names back to originals for inbound tool calls.
+      // Bedrock rejects toolSpec names >64 chars (e.g. long MCP tool names), so
+      // convertTools sanitizes them; the model then calls the sanitized name and
+      // VS Code needs the original to resolve the tool.
+      const toolNameReverseMap = buildToolNameReverseMap(options.tools);
+
       if (options.tools && options.tools.length > 128) {
         throw new Error("Cannot have more than 128 tools per request.");
       }
@@ -670,6 +676,7 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
         trackingProgress,
         extendedThinkingEnabled,
         token,
+        toolNameReverseMap,
       );
     } catch (error) {
       // Check for context window overflow errors and provide better error messages
@@ -1093,25 +1100,59 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
       requiresAdaptiveThinking,
     );
 
-    // Apply OpenAI-style reasoning_effort for non-Anthropic models that support it.
-    // OpenAI gpt-oss accepts an extra "minimal" tier that other vendors reject;
-    // downgrade to "low" for non-OpenAI families.
+    // Apply OpenAI-style reasoning effort for non-Anthropic models that support it.
+    // Two request shapes exist (CLI-verified 2026-08-29):
+    // - "flat":   {"reasoning_effort": "high"}   -- gpt-oss, DeepSeek, Kimi, Qwen, GLM, MiniMax
+    //   Valid values: low | medium | high (+ "minimal" on OpenAI gpt-oss only)
+    // - "nested": {"reasoning": {"effort": ...}} -- GPT-5.6 Sol/Terra/Luna on Bedrock,
+    //   which REJECTS the flat field with `Unknown parameter: 'reasoning_effort'`.
+    //   Valid values: none | low | medium | high | xhigh | max ("minimal" rejected)
     if (reasoningEffort) {
-      const effortToSend =
-        reasoningEffort === "minimal" && !model.id.includes("openai.") ? "low" : reasoningEffort;
-      const existing =
-        (requestInput.additionalModelRequestFields as Record<string, unknown> | undefined) ?? {};
-      requestInput.additionalModelRequestFields = {
-        ...existing,
-        reasoning_effort: effortToSend,
-      };
-      logger.debug("[Bedrock Model Provider] reasoning_effort applied", {
-        modelId: model.id,
-        reasoningEffort: effortToSend,
-      });
+      this.applyReasoningEffort(requestInput, model.id, reasoningEffort);
     }
 
     return requestInput;
+  }
+
+  /**
+   * Resolve the user-selected reasoning effort to a value the model accepts and
+   * attach it in the model's expected shape (flat `reasoning_effort` vs nested
+   * `reasoning.effort`). Values outside a model's supported set are downgraded
+   * to the nearest tier. See buildRequestInput for the CLI-verified shapes.
+   */
+  private applyReasoningEffort(
+    requestInput: ConverseStreamCommandInput,
+    modelId: string,
+    reasoningEffort: ReasoningEffort,
+  ): void {
+    const modelProfile = getModelProfile(modelId);
+    const isNested = modelProfile.reasoningEffortStyle === "nested";
+    const isOpenAi = modelId.includes("openai.");
+
+    let effortToSend: string = reasoningEffort;
+    if (isNested) {
+      // GPT-5.6 accepts none|low|medium|high|xhigh|max but rejects "minimal"
+      if (reasoningEffort === "minimal") {
+        effortToSend = "low";
+      }
+    } else if (reasoningEffort === "none") {
+      effortToSend = isOpenAi ? "minimal" : "low";
+    } else if (reasoningEffort === "xhigh" || reasoningEffort === "max") {
+      effortToSend = "high";
+    } else if (reasoningEffort === "minimal" && !isOpenAi) {
+      effortToSend = "low";
+    }
+
+    const existing =
+      (requestInput.additionalModelRequestFields as Record<string, unknown> | undefined) ?? {};
+    requestInput.additionalModelRequestFields = isNested
+      ? { ...existing, reasoning: { effort: effortToSend } }
+      : { ...existing, reasoning_effort: effortToSend };
+    logger.debug("[Bedrock Model Provider] reasoning effort applied", {
+      modelId,
+      reasoningEffort: effortToSend,
+      style: modelProfile.reasoningEffortStyle,
+    });
   }
 
   /**
@@ -1672,6 +1713,11 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
       return "au";
     }
 
+    // India geo profiles (e.g. in.openai.gpt-5.6-terra) -- CLI-verified 2026-08-29
+    if (sourceRegion.startsWith("ap-south-")) {
+      return "in";
+    }
+
     return undefined;
   }
 
@@ -1837,6 +1883,7 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
     trackingProgress: Progress<LanguageModelResponsePart2>,
     extendedThinkingEnabled: boolean,
     token: CancellationToken,
+    toolNameReverseMap?: ReadonlyMap<string, string>,
   ): Promise<void> {
     const abortController = new AbortController();
     const cancellationListener = token.onCancellationRequested(() => {
@@ -1852,7 +1899,12 @@ export class BedrockChatModelProvider implements vscode.Disposable, LanguageMode
       );
 
       logger.info("[Bedrock Model Provider] Processing stream events");
-      const result = await this.streamProcessor.processStream(stream, trackingProgress, token);
+      const result = await this.streamProcessor.processStream(
+        stream,
+        trackingProgress,
+        token,
+        toolNameReverseMap,
+      );
 
       // Store thinking block for next request ONLY if it has a signature
       // API requires signatures for interleaved thinking, so we only store blocks we can inject

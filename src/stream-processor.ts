@@ -40,11 +40,27 @@ interface ProcessingState {
 }
 
 export class StreamProcessor {
+  /**
+   * Sanitized-name -> original-name map for the current request.
+   * Tool names longer than Bedrock's 64-char toolSpec limit are sanitized on the
+   * way out (see sanitizeToolName in converters/tools.ts); the model then calls
+   * the tool by its sanitized name, and VS Code needs the ORIGINAL name back to
+   * resolve the tool. Undefined/empty when no names needed sanitizing.
+   */
+  private toolNameReverseMap?: ReadonlyMap<string, string>;
+
+  /** Restore the VS Code tool name if it was sanitized for Bedrock. */
+  private restoreToolName(name: string): string {
+    return this.toolNameReverseMap?.get(name) ?? name;
+  }
+
   async processStream(
     stream: AsyncIterable<ConverseStreamOutput>,
     progress: Progress<LanguageModelResponsePart2>,
     token: CancellationToken,
+    toolNameReverseMap?: ReadonlyMap<string, string>,
   ): Promise<StreamProcessingResult> {
+    this.toolNameReverseMap = toolNameReverseMap;
     const state: ProcessingState = {
       capturedThinkingBlock: undefined,
       eventCount: 0,
@@ -304,7 +320,13 @@ export class StreamProcessor {
       input: tool.input,
       name: tool.name,
     });
-    progress.report(new vscode.LanguageModelToolCallPart(tool.id, tool.name, tool.input as object));
+    progress.report(
+      new vscode.LanguageModelToolCallPart(
+        tool.id,
+        this.restoreToolName(tool.name),
+        tool.input as object,
+      ),
+    );
     state.toolBuffer.markEmitted(stop.contentBlockIndex!);
     state.hasEmittedContent = true;
   }
@@ -561,7 +583,11 @@ export class StreamProcessor {
       name: validTool.name,
     });
     progress.report(
-      new vscode.LanguageModelToolCallPart(validTool.id, validTool.name, validTool.input as object),
+      new vscode.LanguageModelToolCallPart(
+        validTool.id,
+        this.restoreToolName(validTool.name),
+        validTool.input as object,
+      ),
     );
     state.toolBuffer.markEmitted(contentBlockIndex);
     state.hasEmittedContent = true;

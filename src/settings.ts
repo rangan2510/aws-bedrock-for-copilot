@@ -64,11 +64,15 @@ export type ThinkingEffort = "high" | "low" | "max" | "medium" | "xhigh";
 
 /**
  * Reasoning effort for non-Anthropic models that accept the OpenAI-style
- * `reasoning_effort` field via additionalModelRequestFields.
+ * reasoning-effort field via additionalModelRequestFields.
  * - "minimal": OpenAI gpt-oss only -- silently rejected by other vendors (we'd downgrade to "low")
  * - "low" / "medium" / "high": Standard tiers
+ * - "none" / "xhigh" / "max": GPT-5.6 (Sol/Terra/Luna) on Bedrock only, which uses
+ *   the nested {"reasoning": {"effort": ...}} shape (CLI-verified 2026-08-29).
+ *   Sent as-is; flat-style models that don't understand these values reject them,
+ *   so resolveReasoningEffortForModel downgrades where needed.
  */
-export type ReasoningEffort = "high" | "low" | "medium" | "minimal";
+export type ReasoningEffort = "high" | "low" | "max" | "medium" | "minimal" | "none" | "xhigh";
 
 /**
  * Get Bedrock settings with priority order
@@ -153,8 +157,16 @@ export async function getBedrockSettings(globalState: vscode.Memento): Promise<B
       ? (rawEffort as ThinkingEffort)
       : "high";
 
-  // Non-Anthropic reasoning_effort (default "high")
-  const validReasoningValues: ReasoningEffort[] = ["high", "low", "medium", "minimal"];
+  // Non-Anthropic reasoning effort (default "high")
+  const validReasoningValues: ReasoningEffort[] = [
+    "high",
+    "low",
+    "max",
+    "medium",
+    "minimal",
+    "none",
+    "xhigh",
+  ];
   const rawReasoning = config.get<string>("reasoningEffort");
   const reasoningEffort: ReasoningEffort =
     rawReasoning && validReasoningValues.includes(rawReasoning as ReasoningEffort)

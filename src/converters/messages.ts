@@ -20,6 +20,7 @@ import {
   declaredFormatToBedrock,
   detectImageFormat,
 } from "./image-format";
+import { sanitizeToolName } from "./tools";
 
 interface ConvertedMessages {
   messages: BedrockMessage[];
@@ -629,13 +630,18 @@ function processTextPart(part: vscode.LanguageModelTextPart): ContentBlock | nul
 }
 
 /**
- * Process tool call part from assistant message content
+ * Process tool call part from assistant message content.
+ * The tool NAME must be sanitized with the same transform used for the
+ * toolConfig (sanitizeToolName): history replays assistant tool calls whose
+ * original names may exceed Bedrock's 64-char toolSpec limit, and the name in
+ * the message must match the name in the tool config or the model/API rejects
+ * the pairing.
  */
 function processToolCallPart(part: vscode.LanguageModelToolCallPart): ContentBlock {
   return {
     toolUse: {
       input: part.input as DocumentType,
-      name: part.name,
+      name: sanitizeToolName(part.name),
       toolUseId: sanitizeToolId(part.callId),
     },
   };

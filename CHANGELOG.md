@@ -14,6 +14,22 @@ This changelog is split into two sections:
 
 ## Fork changelog (`rangan2510/aws-bedrock-for-copilot`)
 
+### [0.13.0-fork.9] - 2026-08-29
+
+#### Added
+
+- **OpenAI GPT-5.6 (Sol / Terra / Luna) support on Bedrock** (`openai.gpt-5.6-sol` / `-terra` / `-luna`). CLI-verified 2026-08-29: INFERENCE_PROFILE-only (`global.` for all three, plus new `in.` India-geo profiles for Terra/Luna), TEXT+IMAGE input, streaming, 1.05M context, 131,072 max output (probed ceiling). These models reject `temperature` outright and reject the flat `reasoning_effort` field -- they require the nested `{"reasoning": {"effort": ...}}` shape with values `none | low | medium | high | xhigh | max`. Prompt-caching `cachePoint` blocks are rejected (`AccessDeniedException`), so caching stays off for them. Tool calling verified working. A new `reasoningEffortStyle` profile field routes each model family to its correct request shape.
+- **`in.` (India) geo inference-profile prefix support** in profile resolution and regional-profile priority (e.g. `in.openai.gpt-5.6-terra` is preferred over `global.` when running from ap-south-* with `preferRegional`).
+- **`reasoningEffort` setting extended** with `none`, `xhigh`, and `max` (GPT-5.6 tiers). Values a model doesn't support are downgraded to the nearest tier instead of failing the request (e.g. `max` -> `high` on gpt-oss; `minimal` -> `low` on GPT-5.6).
+
+#### Fixed
+
+- **Tool names longer than 64 characters no longer reject the entire request.** Bedrock enforces `toolSpec.name` <= 64 chars, and MCP tools can exceed it (reported: `activate_fallback_mcp_pylance_mcp_s_pylanceInstalledTopLevelModules_1`, 69 chars), failing every request in the session with a `ValidationException`. Tool names are now sanitized with the same injective hash-suffix scheme proven for tool IDs in fork.7 -- and because tool NAMES are semantic (the model calls the tool by name and VS Code must resolve the original), a per-request reverse map restores the original name on every inbound tool call, including early-emission and history-replay paths. Names within limits pass through untouched.
+
+#### Compatibility
+
+- Retested against VS Code 1.135: no `LanguageModelChatProvider` API changes in 1.129-1.135 (agent host and UI work only); no code changes required.
+
 ### [0.13.0-fork.8] - 2026-08-03
 
 #### Fixed

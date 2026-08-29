@@ -4,6 +4,15 @@
 
 export interface ModelProfile {
   /**
+   * Shape of the reasoning-effort field the model accepts.
+   * - "flat": `{"reasoning_effort": "high"}` -- gpt-oss, DeepSeek, Kimi, Qwen, GLM, MiniMax
+   * - "nested": `{"reasoning": {"effort": "high"}}` -- GPT-5.6 (Sol/Terra/Luna) on Bedrock,
+   *   which REJECTS the flat field with `Unknown parameter: 'reasoning_effort'`
+   *   (CLI-verified 2026-08-29). Nested models also accept none/xhigh/max.
+   * Only meaningful when supportsReasoningEffort is true.
+   */
+  reasoningEffortStyle: "flat" | "nested";
+  /**
    * Whether the model requires adaptive thinking (thinking.type="adaptive") instead of "enabled".
    * CLI-verified: only Claude Opus 4.7 requires this.
    */
@@ -82,6 +91,7 @@ export interface ModelTokenLimits {
 
 export function getModelProfile(modelId: string): ModelProfile {
   const defaultProfile: ModelProfile = {
+    reasoningEffortStyle: "flat",
     requiresAdaptiveThinking: false,
     requiresInterleavedThinkingHeader: false,
     supports1MContext: false,
@@ -118,6 +128,7 @@ export function getModelProfile(modelId: string): ModelProfile {
       // Nova does NOT support cachePoint after toolResult blocks
       if (modelId.includes("nova")) {
         return {
+          reasoningEffortStyle: "flat",
           requiresAdaptiveThinking: false,
           requiresInterleavedThinkingHeader: false,
           supports1MContext: false,
@@ -203,6 +214,7 @@ export function getModelProfile(modelId: string): ModelProfile {
         modelId.includes("mythos-5");
 
       return {
+        reasoningEffortStyle: "flat",
         requiresAdaptiveThinking,
         requiresInterleavedThinkingHeader,
         supports1MContext: supports1MContext(modelId),
@@ -248,11 +260,6 @@ export function getModelProfile(modelId: string): ModelProfile {
         supportsToolChoice: true,
       };
     }
-    case "nvidia": {
-      // CLI-verified: tool calling supported. `reasoning_effort` is silently
-      // ignored (no reasoningContent emitted) so we don't advertise support.
-      return { ...defaultProfile, supportsToolChoice: true };
-    }
     case "mistral": {
       // CLI-verified: all current Mistral models on Bedrock support tool calling.
       // `reasoning_effort` is silently ignored.
@@ -262,7 +269,29 @@ export function getModelProfile(modelId: string): ModelProfile {
         toolResultFormat: "json" as const,
       };
     }
+    case "nvidia": {
+      // CLI-verified: tool calling supported. `reasoning_effort` is silently
+      // ignored (no reasoningContent emitted) so we don't advertise support.
+      return { ...defaultProfile, supportsToolChoice: true };
+    }
     case "openai": {
+      // GPT-5.6 family on Bedrock (Sol / Terra / Luna). CLI-verified 2026-08-29:
+      // - temperature REJECTED ("This model doesn't support the temperature field")
+      // - flat reasoning_effort REJECTED ("Unknown parameter: 'reasoning_effort'");
+      //   requires nested {"reasoning": {"effort": ...}} with values
+      //   none | low | medium | high | xhigh | max
+      // - cachePoint blocks REJECTED (AccessDeniedException), so prompt caching stays off
+      // - tool calling works (stopReason: tool_use)
+      if (modelId.includes("gpt-5.6")) {
+        return {
+          ...defaultProfile,
+          reasoningEffortStyle: "nested",
+          supportsReasoningEffort: true,
+          supportsToolChoice: true,
+          temperatureDeprecated: true,
+        };
+      }
+
       // CLI-verified: GPT OSS supports tools and `reasoning_effort`
       // (low | medium | high | minimal -- `max` is rejected).
       return {
@@ -311,19 +340,29 @@ export function getModelTokenLimits(
 ): ModelTokenLimits {
   const normalizedModelId = normalizeModelId(modelId);
 
-  // Claude models have specific token limits based on model family
-  const limits = normalizedModelId.startsWith("anthropic.claude")
-    ? getClaudeTokenLimits(normalizedModelId, enable1MContext)
-    : // Default for unknown models
-      {
-        maxInputTokens: 196_000, // 200K context - 4K output
-        maxOutputTokens: 4096,
-      };
+  let limits: ModelTokenLimits;
+  if (normalizedModelId.startsWith("anthropic.claude")) {
+    limits = getClaudeTokenLimits(normalizedModelId, enable1MContext);
+  } else if (normalizedModelId.includes("gpt-5.6")) {
+    // GPT-5.6 (Sol/Terra/Luna) on Bedrock: 1.05M context, 131,072 max output.
+    // Output ceiling CLI-verified 2026-08-29 ("exceeds the model limit of 131072");
+    // context window matches OpenAI's published 1.05M for the same models.
+    limits = {
+      maxInputTokens: 1_050_000 - 131_072,
+      maxOutputTokens: 131_072,
+    };
+  } else {
+    // Default for unknown models
+    limits = {
+      maxInputTokens: 196_000, // 200K context - 4K output
+      maxOutputTokens: 4096,
+    };
+  }
 
   if (safetyMargin > 0) {
     // Reserve additional headroom, but never shrink the input window below a
     // usable floor (25% of the original or 8K, whichever is larger).
-    const floor = Math.max(8_000, Math.floor(limits.maxInputTokens * 0.25));
+    const floor = Math.max(8000, Math.floor(limits.maxInputTokens * 0.25));
     return {
       ...limits,
       maxInputTokens: Math.max(floor, limits.maxInputTokens - safetyMargin),

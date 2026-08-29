@@ -164,11 +164,12 @@ Models must be **enabled** in your [Bedrock Model Access console](https://consol
 | --- | --- | --- |
 | Claude Opus 5, Opus 4.6, 4.7, 4.8, Sonnet 5, Sonnet 4.6, Fable 5 | adaptive thinking + `effort` (low/medium/high/xhigh/max) | `aws-bedrock-for-copilot.anthropic.thinking.effort` |
 | Claude Opus 4.5, 4.1, 4, Sonnet 4.5, Sonnet 4, Haiku 4.5 | enabled thinking + `budget_tokens` | `aws-bedrock-for-copilot.anthropic.thinking.budgetTokens` |
+| OpenAI GPT-5.6 Sol/Terra/Luna | nested `reasoning.effort` (none/low/medium/high/xhigh/max) | `aws-bedrock-for-copilot.reasoningEffort` |
 | OpenAI gpt-oss, DeepSeek V3.2, Kimi K2.x, Qwen3, GLM 4.7/5, MiniMax M2.x | OpenAI-style `reasoning_effort` (minimal/low/medium/high) | `aws-bedrock-for-copilot.reasoningEffort` |
 | Everything else (Nova, Llama, Gemma, Mistral, NVIDIA, Cohere, AI21, Writer, &hellip;) | no reasoning controls; settings above are ignored | -- |
 | DeepSeek R1, Kimi K2 Thinking | always-on reasoning, no toggle | -- |
 
-`xhigh` is Opus 4.7/4.8 only. `max` is Opus 4.6/4.7/4.8 and Sonnet 4.6 only. Unsupported levels fall back to `high` automatically. `minimal` is OpenAI-only and silently downgraded to `low` for other vendors.
+`xhigh` is Opus 4.7/4.8 and GPT-5.6 only. `max` is Opus 4.6/4.7/4.8, Sonnet 4.6, and GPT-5.6 only. Unsupported levels fall back to the nearest tier automatically (`max`/`xhigh` -> `high`, `minimal`/`none` -> `low` where unsupported). GPT-5.6 rejects `temperature` and prompt caching; both are handled automatically.
 
 ### Models that won't work with Copilot Chat
 

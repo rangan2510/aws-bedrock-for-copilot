@@ -410,7 +410,7 @@ export class BedrockAPIClient {
     // - ARN: full ARN format (arn:aws:bedrock:region:account:inference-profile/...
     //   or application-inference-profile/...)
     const dotProfilePattern =
-      /^(global|af|ap|apac|au|ca|cn-north|cn-northwest|eu|il|jp|me|mx|sa|us|us-gov-east|us-gov-west)\./;
+      /^(global|af|ap|apac|au|ca|cn-north|cn-northwest|eu|il|in|jp|me|mx|sa|us|us-gov-east|us-gov-west)\./;
     const arnProfilePattern =
       /^arn:aws(-[a-z0-9]+)?:bedrock:[a-z0-9-]+:\d{12}:(application-)?inference-profile\//;
     const appProfileIdPattern = /^ip-[a-z0-9]+/i;

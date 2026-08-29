@@ -8,7 +8,7 @@
     "type": "git",
     "url": "https://github.com/rangan2510/aws-bedrock-for-copilot"
   },
-  "version": "0.13.0-fork.8",
+  "version": "0.13.0-fork.9",
   "engines": {
     "vscode": "^1.116.0"
   },
@@ -182,18 +182,24 @@
           "type": "string",
           "default": "high",
           "enum": [
+            "none",
             "minimal",
             "low",
             "medium",
-            "high"
+            "high",
+            "xhigh",
+            "max"
           ],
           "enumDescriptions": [
-            "Lowest reasoning, fastest responses (OpenAI gpt-oss only -- silently rejected by other vendors and falls back to 'low').",
+            "No reasoning (GPT-5.6 Sol/Terra/Luna only -- downgraded to 'minimal'/'low' elsewhere).",
+            "Lowest reasoning, fastest responses (OpenAI gpt-oss only -- downgraded to 'low' elsewhere).",
             "Conservative reasoning. Faster, cheaper.",
             "Balanced reasoning depth and latency.",
-            "Default. Most thorough reasoning, best quality."
+            "Default. Most thorough reasoning, best quality.",
+            "Extra-high reasoning (GPT-5.6 only -- downgraded to 'high' elsewhere).",
+            "Maximum reasoning (GPT-5.6 only -- downgraded to 'high' elsewhere)."
           ],
-          "description": "Reasoning effort sent as `reasoning_effort` for non-Anthropic models that support it (OpenAI gpt-oss, DeepSeek V3.2, Moonshot Kimi K2.5/K2 Thinking, Qwen3, Z.AI GLM, MiniMax M2.x). Silently ignored on models that don't support reasoning. Anthropic Claude uses its own `anthropic.thinking.effort` setting instead.",
+          "description": "Reasoning effort for non-Anthropic reasoning models. Sent as flat `reasoning_effort` (OpenAI gpt-oss, DeepSeek V3.2, Moonshot Kimi K2.5/K2 Thinking, Qwen3, Z.AI GLM, MiniMax M2.x) or nested `reasoning.effort` (OpenAI GPT-5.6 Sol/Terra/Luna on Bedrock). Values a model doesn't support are downgraded to the nearest tier. Silently ignored on models without reasoning. Anthropic Claude uses `anthropic.thinking.effort` instead.",
           "scope": "resource"
         },
         "aws-bedrock-for-copilot.promptCaching.enabled": {
